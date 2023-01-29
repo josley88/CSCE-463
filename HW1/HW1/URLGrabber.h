@@ -17,6 +17,7 @@ class URLGrabber {
 	char query [MAX_HOST_LEN];
 	char* URL;
 	char* buf;
+	char* headerBuf;
 	
 
 	int port;
@@ -41,10 +42,13 @@ class URLGrabber {
 		bool connectToSite();
 		bool loadPage();
 		void verifyHeader(char* _status);
+		void separateHeader();
 		bool parseHTML();
 		void printHeader();
+		void printBody();
+		
 
 		~URLGrabber() {
-			delete buf;
+			delete headerBuf;
 		}
 };

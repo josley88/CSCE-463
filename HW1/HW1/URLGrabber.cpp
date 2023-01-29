@@ -237,13 +237,13 @@ bool URLGrabber::loadPage() {
 
 			// resize the array to 2048 + the current size if the incoming data is too big
 			if ((allocatedSize - curPos) < recievedBytes) {
-				char* tempBuf = new char[allocatedSize + 2048];
+				char* tempBuf = new char[allocatedSize + 8192];
 				memcpy(tempBuf, buf, curPos);
 				
 				delete buf;
 				buf = tempBuf;
 
-				allocatedSize += 2048;
+				allocatedSize += 8192;
 			}
 
 			totalRecievedBytes += recievedBytes;
@@ -282,6 +282,24 @@ void URLGrabber::verifyHeader(char* _status) {
 	printf("\tVerifying header... status code %s\n", _status);
 }
 
+void URLGrabber::separateHeader() {
+
+	// move pointer for header to beginning of buffer
+	headerBuf = buf;
+
+	unsigned long i = 0;
+
+	// find where two newlines are
+	while ((buf[i] != '\r') || (buf[i + 1] != '\n') || (buf[i + 2] != '\r') || (buf[i + 3] != '\n')) {
+		i++;
+	}
+
+	// move buf pointer to body location
+	buf += i + 4;
+
+	// null terminate headerBuf at end of header
+	headerBuf[i] = 0;
+}
 
 bool URLGrabber::parseHTML() {
 	printf("      + Parsing page... ");
@@ -299,14 +317,15 @@ bool URLGrabber::parseHTML() {
 
 void URLGrabber::printHeader() {
 	printf("----------------------------------------\n");
-
-	long i = 0;
-	//char headerBuf[2048];
 	
 	// print till program reaches two consecutive newlines
-	while ((buf[i] != '\r') || (buf[i + 1] != '\n') || (buf[i + 2] != '\r') || (buf[i + 3] != '\n')) {
-		printf("%c", buf[i]);
-		i++;
-	}
-
+	printf("Loading %d bytes:\n%s\n", sizeof(headerBuf), headerBuf);
 }
+
+void URLGrabber::printBody() {
+	printf("----------------------------------------\n");
+
+	// print till program reaches two consecutive newlines
+	printf("Loading %d bytes:\n", sizeof(buf));
+}
+
