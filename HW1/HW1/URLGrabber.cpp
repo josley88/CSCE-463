@@ -237,13 +237,13 @@ bool URLGrabber::loadPage() {
 
 			// resize the array to 2048 + the current size if the incoming data is too big
 			if ((allocatedSize - curPos) < recievedBytes) {
-				char* tempBuf = new char[allocatedSize + 8192];
+				char* tempBuf = new char[allocatedSize + 2048];
 				memcpy(tempBuf, buf, curPos);
 				
 				delete buf;
 				buf = tempBuf;
 
-				allocatedSize += 8192;
+				allocatedSize += 2048;
 			}
 
 			totalRecievedBytes += recievedBytes;

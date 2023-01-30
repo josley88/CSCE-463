@@ -69,6 +69,8 @@ int main(int argc, char** argv)
 		exit(-1);
 	}
 
+	// ------------------------- Separate Header from Body -------------------------
+	grabber.separateHeader();
 
 	// ------------------------- Header Verification -------------------------
 
@@ -85,6 +87,8 @@ int main(int argc, char** argv)
 	// ------------------------- Print Header -------------------------
 
 	grabber.printHeader();
+
+	grabber.printBody();
 
 	WSACleanup();
 
