@@ -5,162 +5,65 @@
  */
 
 #include "pch.h"
+using namespace Utility;
+
 
 int main(int argc, char** argv)
 {
 
+	char* URL;
+
+	//check arguments
 	switch (argc) {
-		case 1:	
-			printf("Error: no URL given\n");
+	case 1:
+		printf("Error: no URL given\n");
+		WSACleanup();
+		exit(-1);
+	case 2:
+		URL = argv[1];
+		break;
+	case 3:
+		if (argv[1][0] != '1' || strlen(argv[1]) != 1) { // check if num threads is not 1 (also check it isnt 1xxx...)
+			printf("Error: number of threads must be 1");
 			WSACleanup();
 			exit(-1);
-		case 2: 
-		case 3:
-			break; // these are valid argument counts
-		default:
-			printf("Error: too many arguments given\n");
-			WSACleanup();
-			exit(-1);
+		}
+		URL = argv[2];
+		break; // these are valid argument counts
+	default:
+		printf("Error: too many arguments given\n");
+		WSACleanup();
+		exit(-1);
 	}
 
-	char *URL = argv[1];
-	char *URLs[128];
+	char* URLs[128];
 	URLs[0] = URL;
 
-	printf("URLs: %s\n", URLs[0]);
+	printf("URL: %s\n", URLs[0]);
 
 	// create URL Grabber worker
 	URLGrabber grabber(URLs);
 
+	// try network functions and cleanup/exit if they fail
+	attempt(grabber.parseURL(), grabber);
+	attempt(grabber.lookupDNS(), grabber);
+	attempt(grabber.connectToSite(), grabber);
+	attempt(grabber.loadPage(), grabber);
 
-	// Note to TA/Prof: These statements may be combined, but are kept separate for future use in case
-	// specific exit actions need to be taken for each function
-	// ------------------------- Parse URL -------------------------
-	if (!grabber.parseURL()) {
-		WSACleanup();
-		grabber.~URLGrabber();
-		exit(-1);
-	}
-
-
-
-	// ------------------------- Lookup DNS -------------------------
-	if (!grabber.lookupDNS()) {
-		WSACleanup();
-		grabber.~URLGrabber();
-		exit(-1);
-	}
-
-
-
-	// ------------------------- Connect to Server -------------------------
-	if (!grabber.connectToSite()) {
-		WSACleanup();
-		grabber.~URLGrabber();
-		exit(-1);
-	}
-
-
-
-	// ------------------------- Load Page -------------------------
-	if (!grabber.loadPage()) {
-		WSACleanup();
-		grabber.~URLGrabber();
-		exit(-1);
-	}
-
-	// ------------------------- Separate Header from Body -------------------------
 	grabber.separateHeader();
-
-	// ------------------------- Header Verification -------------------------
 
 	char status[4];
 	grabber.verifyHeader(status);
-
-	// ------------------------- Page Parsing -------------------------
 	
+	// only parse if status code is 2xx
 	if (status[0] == '2') {
 		grabber.parseHTML();
 	}
 
 
-	// ------------------------- Print Header -------------------------
-
 	grabber.printHeader();
-
 	grabber.printBody();
 
 	WSACleanup();
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-	//// print our primary/secondary DNS IPs
-	//DNS dns;
-	//dns.printDNSServer ();
-
-	//printf ("-----------------\n");
-
-	//CPU cpu;
-	//// run a loop printing CPU usage 10 times
-	//for (int i = 0; i < 10; i++)
-	//{
-	//	// average CPU utilization over 200 ms; must sleep at least a few milliseconds *after* the constructor 
-	//	// of class CPU and between calls to GetCpuUtilization
-	//	Sleep (200);
-	//	// now print
-	//	double util = cpu.GetCpuUtilization (NULL);
-	//	// -2 means the kernel counters did not accumulate enough to produce a result
-	//	if (util != -2)
-	//		printf ("current CPU utilization %f%%\n", util);
-	//}
-
-	//printf ("-----------------\n");
-
-	//// thread handles are stored here; they can be used to check status of threads, or kill them
-	//HANDLE *handles = new HANDLE [3];
-	//Test p;
-	//
-	//// get current time; link with winmm.lib
-	//clock_t t = clock();
-
-	//// structure p is the shared space between the threads
-	//handles [0] = CreateThread (NULL, 0, (LPTHREAD_START_ROUTINE)threadA, &p, 0, NULL);		// start threadA (instance #1) 
-	//handles [1] = CreateThread (NULL, 0, (LPTHREAD_START_ROUTINE)threadA, &p, 0, NULL);		// start threadA (instance #2)
-	//handles [2] = CreateThread (NULL, 0, (LPTHREAD_START_ROUTINE)threadB, &p, 0, NULL);		// start threadB 
-
-	//// make sure this thread hangs here until the other three quit; otherwise, the program will terminate prematurely
-	//for (int i = 0; i < 3; i++)
-	//{
-	//	WaitForSingleObject (handles [i], INFINITE);
-	//	CloseHandle (handles [i]);
-	//}
-	//
-	//printf ("terminating main(), completion time %.2f sec\n", (double)(clock() - t)/CLOCKS_PER_SEC);
-	//return 0; 
 }

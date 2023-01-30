@@ -18,9 +18,11 @@
 #include <windows.h>
 #include <ctime>
 #include <string>
+#include "fileapi.h"
 
 #include "DNS.h"
 #include "URLGrabber.h"
+#include "Utility.h"
 
 
 #endif //PCH_H
