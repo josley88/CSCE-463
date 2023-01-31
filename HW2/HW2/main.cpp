@@ -3,7 +3,6 @@
  * CSCE 463
  * Spring 2023
  */
-
 #include "pch.h"
 using namespace Utility;
 
@@ -11,58 +10,57 @@ using namespace Utility;
 int main(int argc, char** argv)
 {
 
-	char* URL;
+	char** URLs = new char* [MAX_URL_COUNT];
+	for (unsigned int i = 0; i < MAX_URL_COUNT; i++) {
+		URLs[i] = new char[MAX_HOST_LEN];
+	}
 
-	//check arguments
-	switch (argc) {
-	case 1:
-		printf("Error: no URL given\n");
-		WSACleanup();
-		exit(-1);
-	case 2:
-		URL = argv[1];
-		break;
-	case 3:
-		if (argv[1][0] != '1' || strlen(argv[1]) != 1) { // check if num threads is not 1 (also check it isnt 1xxx...)
-			printf("Error: number of threads must be 1");
-			WSACleanup();
-			exit(-1);
+	// get URLs from either input arg or from input file
+	int numURLs = getURLs(argc, argv, &URLs);
+
+	//printf("There are %d URLs\n", numURLs);
+
+
+	// create URLProcessor worker
+	URLProcessor processor(&URLs);
+
+	// for each URL, process it
+	for (int i = 0; i < numURLs; i++) {
+		char status[4];
+
+		// try network functions and cleanup/continue if they fail
+		if (
+			!processor.parseURL()					||
+			!processor.lookupDNS()					||
+			!processor.connectToSite()				||
+
+			// load Robots first
+			!processor.loadPage(true)				||
+			!processor.separateHeader()				||
+			!processor.verifyHeader(status, '4')	||
+
+			// load page if robots passed
+			!processor.loadPage(false)				||
+			!processor.separateHeader()				||
+			!processor.verifyHeader(status, '2')
+		) {
+			processor.nextURL();
+			continue;
 		}
-		URL = argv[2];
-		break; // these are valid argument counts
-	default:
-		printf("Error: too many arguments given\n");
-		WSACleanup();
-		exit(-1);
-	}
 
-	char* URLs[128];
-	URLs[0] = URL;
+		processor.parseHTML();
+		processor.printHeader();
+		//grabber.printBody();
 
-	printf("URL: %s\n", URLs[0]);
-
-	// create URL Grabber worker
-	URLGrabber grabber(URLs);
-
-	// try network functions and cleanup/exit if they fail
-	attempt(grabber.parseURL(), grabber);
-	attempt(grabber.lookupDNS(), grabber);
-	attempt(grabber.connectToSite(), grabber);
-	attempt(grabber.loadPage(), grabber);
-
-	grabber.separateHeader();
-
-	char status[4];
-	grabber.verifyHeader(status);
-	
-	// only parse if status code is 2xx
-	if (status[0] == '2') {
-		grabber.parseHTML();
+		processor.nextURL();
 	}
 
 
-	grabber.printHeader();
-	grabber.printBody();
+	// cleanup heap for URLs
+	for (int i = 0; i < MAX_URL_COUNT; i++) {
+		delete[] URLs[i];
+	}
+	delete[] URLs;
 
 	WSACleanup();
 

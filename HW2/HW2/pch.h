@@ -12,6 +12,8 @@
 #ifndef PCH_H
 #define PCH_H
 
+#define MAX_URL_COUNT 10000
+
 // add headers that you want to pre-compile here
 
 #include <stdio.h>
@@ -21,8 +23,8 @@
 #include "fileapi.h"
 
 #include "DNS.h"
-#include "URLGrabber.h"
+#include "URLProcessor.h"
+#include "FileReader.h"
 #include "Utility.h"
-
 
 #endif //PCH_H

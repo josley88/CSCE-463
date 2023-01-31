@@ -1,8 +1,7 @@
 #pragma once
 namespace Utility {
-
-		void attempt(bool functionSuccess);
-		void attempt(bool functionSuccess, URLGrabber grabberObj);
-
+	
+	int getURLs(int argc, char** argv, char*** URLs);
+	void cleanQuit();
 };
 
