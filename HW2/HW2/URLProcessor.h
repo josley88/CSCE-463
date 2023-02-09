@@ -1,4 +1,4 @@
-/* URLGrabber.h
+/* URLProcessor.h
  * Joseph Shumway
  * CSCE 463
  * Spring 2023
@@ -6,9 +6,14 @@
 
 #pragma once
 #include "HTMLParserBase.h"
+#include <set>
+#include <string>
 
 #define INITIAL_BUF_SIZE 2048
 #define THRESHOLD 2048
+
+using std::set;
+using std::string;
 
 class URLProcessor {
 
@@ -23,6 +28,7 @@ class URLProcessor {
 	int urlIndex;
 	int headerSize;
 	int bodySize;
+	int maxDownloadSize;
 
 	int port;
 	int allocatedSize;
@@ -31,6 +37,9 @@ class URLProcessor {
 	// open a TCP socket
 	SOCKET sock;
 	struct sockaddr_in server;
+
+	set<DWORD> seenIPs;
+	set<string> seenHosts;
 
 	clock_t time_ms;
 
@@ -45,15 +54,19 @@ class URLProcessor {
 		}
 
 		bool parseURL();
-		bool lookupDNS();
-		bool connectToSite();
+		bool lookupDNS(bool reconnect);
+		bool connectToSite(bool robots);
 		bool loadPage(bool getHEAD);
 		bool verifyHeader(char* _status, char expectedCode);
 		bool separateHeader();
 		bool parseHTML();
-		void printHeader();
+		bool printHeader();
 		void printBody();
 		void nextURL();
 
 		void cleanQuit(char* allocatedBuffer);
+
+		~URLProcessor() {
+			delete[] buf;
+		}
 };

@@ -1,3 +1,9 @@
+/* Utility.cpp
+ * Joseph Shumway
+ * CSCE 463
+ * Spring 2023
+ */
+
 #include "pch.h"
 
 namespace Utility {
@@ -5,6 +11,8 @@ namespace Utility {
 	int getURLs(int argc, char** argv, char*** URLs) {
 		
 		char filename[128] = { 0 };
+		int result = 0;
+
 		FileReader reader;
 
 		switch (argc) {
@@ -31,8 +39,8 @@ namespace Utility {
 
 				// read file
 				reader.readFile(filename);
-
-				return reader.extractURLs(URLs);
+				result = reader.extractURLs(URLs);
+				return result;
 
 			default:
 				printf("Error: too many arguments given\n");

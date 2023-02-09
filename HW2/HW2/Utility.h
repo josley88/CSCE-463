@@ -1,3 +1,9 @@
+/* Utility.h
+ * Joseph Shumway
+ * CSCE 463
+ * Spring 2023
+ */
+
 #pragma once
 namespace Utility {
 	

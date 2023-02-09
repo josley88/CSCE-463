@@ -3,6 +3,7 @@
  * CSCE 463
  * Spring 2023
  */
+
 #include "pch.h"
 using namespace Utility;
 
@@ -10,8 +11,8 @@ using namespace Utility;
 int main(int argc, char** argv)
 {
 
-	char** URLs = new char* [MAX_URL_COUNT];
-	for (unsigned int i = 0; i < MAX_URL_COUNT; i++) {
+	char** URLs = new char* [INITIAL_URL_COUNT];
+	for (unsigned int i = 0; i < INITIAL_URL_COUNT; i++) {
 		URLs[i] = new char[MAX_HOST_LEN];
 	}
 
@@ -31,8 +32,8 @@ int main(int argc, char** argv)
 		// try network functions and cleanup/continue if they fail
 		if (
 			!processor.parseURL()					||
-			!processor.lookupDNS()					||
-			!processor.connectToSite()				||
+			!processor.lookupDNS(false)				||
+			!processor.connectToSite(true)			||
 
 			// load Robots first
 			!processor.loadPage(true)				||
@@ -40,16 +41,17 @@ int main(int argc, char** argv)
 			!processor.verifyHeader(status, '4')	||
 
 			// load page if robots passed
+			!processor.lookupDNS(true)				||
+			!processor.connectToSite(false)			||
 			!processor.loadPage(false)				||
 			!processor.separateHeader()				||
-			!processor.verifyHeader(status, '2')
+			!processor.verifyHeader(status, '2')	||
+			!processor.parseHTML()					||
+			!processor.printHeader()
 		) {
 			processor.nextURL();
 			continue;
 		}
-
-		processor.parseHTML();
-		processor.printHeader();
 		//grabber.printBody();
 
 		processor.nextURL();
@@ -57,7 +59,7 @@ int main(int argc, char** argv)
 
 
 	// cleanup heap for URLs
-	for (int i = 0; i < MAX_URL_COUNT; i++) {
+	for (int i = 0; i < INITIAL_URL_COUNT; i++) {
 		delete[] URLs[i];
 	}
 	delete[] URLs;

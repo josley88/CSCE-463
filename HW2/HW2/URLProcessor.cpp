@@ -1,4 +1,4 @@
-/* URLGrabber.cpp
+/* URLProcessor.cpp
  * Joseph Shumway
  * CSCE 463
  * Spring 2023
@@ -15,11 +15,11 @@ bool URLProcessor::parseURL() {
 	//char testURL[] = "http://tamu.edu?tes:t=1/blah";
 	//printf("URL: %s\n\n", URL);
 
-	printf("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\tParsing URL... ");
+	printf("URL: % s\n\tParsing URL... ", URLs[urlIndex]);
 
 	if (strlen(URLs[urlIndex]) < 8) {
+		char* test = URLs[urlIndex];
 		printf("invalid URL!\n");
-		nextURL();
 		return false;
 	}
 
@@ -28,7 +28,7 @@ bool URLProcessor::parseURL() {
 	memcpy(temp, URLs[urlIndex], 7);
 	if (strcmp(temp, scheme) != 0) {
 		printf("failed with invalid scheme\n");
-		nextURL();
+		char* test = URLs[urlIndex];
 		return false;
 	}
 
@@ -41,7 +41,6 @@ bool URLProcessor::parseURL() {
 	// reject URLs that are larger than the max allowed (minus the tag since it is not needed)
 	if (strlen(URLs[urlIndex]) > MAX_REQUEST_LEN) {
 		printf("failed because URL is longer than max request length");
-		nextURL();
 		return false;
 	}
 
@@ -86,7 +85,6 @@ bool URLProcessor::parseURL() {
 
 	if (port == 0 || port > 65535) {
 		printf("failed with invalid port\n");
-		nextURL();
 		return false;
 	}
 
@@ -106,8 +104,7 @@ bool URLProcessor::parseURL() {
 	return true;
 }
 
-
-bool URLProcessor::lookupDNS() {
+bool URLProcessor::lookupDNS(bool reconnect = false) {
 
 	WSADATA wsaData;
 
@@ -115,15 +112,18 @@ bool URLProcessor::lookupDNS() {
 	WORD wVersionRequested = MAKEWORD(2, 2);
 	if (WSAStartup(wVersionRequested, &wsaData) != 0) {
 		printf("WSAStartup error %d\n", WSAGetLastError());
-		nextURL();
 		return false;
 	}
 
 	sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (sock == INVALID_SOCKET) {
 		printf("socket() generated error %d\n", WSAGetLastError());
-		nextURL();
 		return false;
+	}
+
+	// no need to lookup DNS if its a reconnect
+	if (reconnect) {
+		return true;
 	}
 
 	// structure used in DNS lookups
@@ -132,23 +132,59 @@ bool URLProcessor::lookupDNS() {
 	// first assume that the string is an IP address
 	DWORD IP = inet_addr(host);
 
+	printf("\tChecking host uniqueness... ");
+
+	// if not unique host, move on
+	if (!seenHosts.insert(host).second) {
+		printf("failed\n");
+		return false;
+	}
+	else {
+		printf("passed\n");
+	}
+	
+	
+
 	if (IP == INADDR_NONE) {
+
 		printf("\tDoing DNS... ");
 		clock_t time_ms = clock();
 
 		// if not a valid IP, then do a DNS lookup
 		if ((remote = gethostbyname(host)) == NULL) {
 			printf("failed with %d\n", WSAGetLastError());
-			nextURL();
 			return false;
 		}
 		else {// take the first IP address and copy into sin_addr
 			memcpy((char*)&(server.sin_addr), remote->h_addr, remote->h_length);
 			printf("done in %d ms, found %s\n", clock() - time_ms, inet_ntoa(server.sin_addr));
+
+			// if not unique IP, move on
+			printf("\tChecking IP uniqueness... ");
+			if (!seenIPs.insert(inet_addr(inet_ntoa(server.sin_addr))).second) {
+				printf("failed\n");
+				return false;
+			}
+			else {
+				printf("passed\n");
+			}
+			
 		}
 
 	}
 	else {
+		printf("\tChecking IP uniqueness... ");
+
+		// if not unique IP, move on
+		if (!seenIPs.insert(IP).second) {
+			printf("failed\n");
+			return false;
+		}
+		else {
+			printf("passed\n");
+		}
+		
+
 		// if a valid IP, directly drop its binary version into sin_addr
 		server.sin_addr.S_un.S_addr = IP;
 	}
@@ -161,15 +197,20 @@ bool URLProcessor::lookupDNS() {
 }
 
 
-bool URLProcessor::connectToSite() {
+bool URLProcessor::connectToSite(bool robots = false) {
 
-	printf("      * Connecting on page... ");
+	if (robots) {
+		printf("        Connecting on robots... ");
+	}
+	else {
+		printf("      * Connecting on page... ");
+	}
+	
 	time_ms = clock();
 
 	// connect to the server on specified port
 	if (connect(sock, (struct sockaddr*)&server, sizeof(struct sockaddr_in)) == SOCKET_ERROR) {
 		printf("failed with %d\n", WSAGetLastError());
-		nextURL();
 		return false;
 	}
 
@@ -180,14 +221,21 @@ bool URLProcessor::connectToSite() {
 }
 
 
-bool URLProcessor::loadPage(bool getHEAD = false) {
+bool URLProcessor::loadPage(bool robots = false) {
+
+	if (robots) {
+		maxDownloadSize = 16000;
+	}
+	else {
+		maxDownloadSize = 2000000;
+	}
 
 	printf("\tLoading... ");
 	time_ms = clock();
 
 	// HTTP request string builder
 	char request[MAX_REQUEST_LEN];
-	if (getHEAD) {
+	if (robots) {
 		sprintf_s(request, "HEAD %s HTTP/1.0\r\nUser-Agent: crawlerbot / 1.0\r\nHost: %s\r\nConnection: close\r\n\r\n", path, host);
 	}
 	else {
@@ -204,8 +252,6 @@ bool URLProcessor::loadPage(bool getHEAD = false) {
 	if (send(sock, request, requestLength, 0) == SOCKET_ERROR)
 	{
 		printf("Send error: %d\n", WSAGetLastError());
-		closesocket(sock);
-		nextURL();
 		return false;
 	}
 
@@ -235,7 +281,6 @@ bool URLProcessor::loadPage(bool getHEAD = false) {
 			// error
 			if (recievedBytes == SOCKET_ERROR) {
 				printf("failed with %d on recv\n", WSAGetLastError());
-				nextURL();
 				return false;
 			}
 			
@@ -244,6 +289,11 @@ bool URLProcessor::loadPage(bool getHEAD = false) {
 
 				buf[curPos] = 0;
 				break;
+			}
+
+			if (recievedBytes + totalRecievedBytes > maxDownloadSize) {
+				printf("failed with exceeding max\n");
+				return false;
 			}
 
 			curPos += recievedBytes;
@@ -263,8 +313,7 @@ bool URLProcessor::loadPage(bool getHEAD = false) {
 
 		}
 		else if (ret == 0) { // timeout
-			printf("failed with timeout\n");
-			nextURL();
+			printf("failed with slow download\n");
 			return false;
 		}
 			
@@ -278,13 +327,16 @@ bool URLProcessor::loadPage(bool getHEAD = false) {
 	memcpy(tmp, buf, 5);
 
 	if (strcmp(http, tmp) != 0) {
-		printf("failed with non-HTTP header (does not begin with HTTP/)");
-		nextURL();
+		printf("failed with non-HTTP header (does not begin with HTTP/)\n"); //REMOVE
+		printf("Header: %s", buf);
 		return false;
 	}
 
+
 	// close the socket to this server; open again for the next one
-	closesocket(sock);	
+	closesocket(sock);
+	WSACleanup();
+
 
 	printf("done in %d ms with %d bytes\n", clock() - time_ms, totalRecievedBytes);
 
@@ -297,7 +349,7 @@ bool URLProcessor::verifyHeader(char* _status, char expectedCode) {
 	memcpy(_status, tmp, 4);
 
 	printf("\tVerifying header... status code %s\n", _status);
-	printf("\tExpecting code %cXX\n", expectedCode);
+	//printf("\tExpecting code %cXX\n", expectedCode);
 	return _status[0] == expectedCode;
 }
 
@@ -338,12 +390,14 @@ bool URLProcessor::parseHTML() {
 }
 
 
-void URLProcessor::printHeader() {
+bool URLProcessor::printHeader() {
 	printf("----------------------------------------\n");
 
 	// print till program reaches two consecutive newlines
 	printf("Loading %d bytes for header:\n%s\n", headerSize, headerBuf);
-	}
+	
+	return true;
+}
 
 void URLProcessor::printBody() {
 	printf("----------------------------------------\n");

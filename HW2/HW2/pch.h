@@ -12,7 +12,7 @@
 #ifndef PCH_H
 #define PCH_H
 
-#define MAX_URL_COUNT 10000
+#define INITIAL_URL_COUNT 10000
 
 // add headers that you want to pre-compile here
 
