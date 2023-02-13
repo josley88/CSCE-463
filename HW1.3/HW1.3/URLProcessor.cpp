@@ -373,8 +373,8 @@ bool URLProcessor::separateHeader() {
 
 	unsigned long i = 0;
 
-	// find where two newlines are
-	while ((buf[i] != '\r') || (buf[i + 1] != '\n') || (buf[i + 2] != '\r') || (buf[i + 3] != '\n')) {
+	// find where two newlines are and stop before too long (2000 characters)
+	while (i < (2000) && ((buf[i] != '\r') || (buf[i + 1] != '\n') || (buf[i + 2] != '\r') || (buf[i + 3] != '\n'))) {
 		i++;
 	}
 

@@ -12,7 +12,7 @@ UINT Crawler::statThread() {
 
 		EnterCriticalSection(&criticalSection);
 		
-		time_s = (clock() - startTime) / TIME_INTERVAL;
+		time_s = (clock() - startTime) / 1000;
 		
 		// print stats
 		printf("[%3d] %3d Q%6d E %7d H%6d D%6d I%5d R%5d C%5d L%4dK\n",
@@ -56,25 +56,29 @@ UINT Crawler::crawlerThread() {
 	HTMLParserBase parser;
 
 	char status[4];
+	char* URL;
 
 	// keep going till the URL queue is empty
 	while (true) {
 
-		EnterCriticalSection(&criticalSection);
+		
 		if (Q.empty()) {
 			break;
 		}
 
+		EnterCriticalSection(&criticalSection);
+
 		// dequeue URL
-		char* URL = Q.front();
-		char URL2[512] = { 0 };
-		memcpy_s(URL2, strlen(URL), URL, strlen(URL));
+		URL = Q.front();
 
 		Q.pop();
-		queueSize--;
-		extractedURLs++;
 
 		LeaveCriticalSection(&criticalSection);
+
+		InterlockedDecrement(&queueSize);
+		InterlockedIncrement(&extractedURLs);
+
+		
 
 		// try network functions and cleanup/continue if they fail
 		if (
@@ -161,10 +165,11 @@ void Crawler::startThreads() {
 void Crawler::waitForThreads() {
 
 	// wait for threads to finish and close their handles
-	WaitForMultipleObjects(numThreads, threads, TRUE, INFINITE);
+	// WaitForMultipleObjects(numThreads, threads, TRUE, INFINITE);
 
 	for (int i = 0; i < numThreads; i++) {
 		if (threads[i] != NULL) {
+			WaitForSingleObject(threads[i], INFINITE);
 			CloseHandle(threads[i]);
 		}
 		else {

@@ -1,6 +1,6 @@
 #pragma once
 
-#define TIME_INTERVAL 1000
+#define TIME_INTERVAL 2000
 
 class Crawler {
 
