@@ -33,7 +33,7 @@ class Crawler {
 	
 
 	public:
-		Crawler(int _threads, int _numURLs, char*** URLs) {
+		Crawler(int _threads, int _numURLs, vector<char*>& URLs) {
 			
 			numThreads = _threads;
 			
@@ -59,7 +59,7 @@ class Crawler {
 
 			// initialize the queue of URLs
 			for (int i = 0; i < _numURLs; i++) {
-				Q.push((*URLs)[i]);
+				Q.push(URLs.at(i));
 			}
 
 			queueSize = Q.size();

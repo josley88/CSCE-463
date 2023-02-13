@@ -49,14 +49,16 @@ char* FileReader::readFile(char* filename) {
 	return fileBuf;
 }
 
-int FileReader::extractURLs(char*** URLs) {
+int FileReader::extractURLs(vector<char*>& URLs) {
 	
 	int i = 0;
+	int URLCount = 0;
 
 	char* token;
 	char* nextToken;
 
 	token = strtok_s(fileBuf, "\r\n", &nextToken);
+	//printf("%s\n", token);
 
 	// loop through tokens until EOF
 	while (token != NULL && token != "\0") {
@@ -95,20 +97,22 @@ int FileReader::extractURLs(char*** URLs) {
 		}
 
 		// copy token to URL array at i
-		memcpy_s((*URLs)[i], MAX_HOST_LEN, token, tokenLength);
+		//memcpy_s((*URLs)[i], MAX_HOST_LEN, token, tokenLength);
+		URLs.push_back(token);
 
 		// null terminate the string
-		(*URLs)[i][tokenLength] = 0;
+		//(*URLs)[i][tokenLength] = 0;
 		i++;
+		URLCount++;
 
 		// get next token
 		token = strtok_s(NULL, "\r\n", &nextToken);
-		
+		//printf("%s\n", token);
 	}
 	
 	// return the number of URLs
 	//printf("Num URLs: %d", i);
-	return i;
+	return URLCount;
 }
 
 
@@ -125,10 +129,10 @@ void FileReader::printAt(int i) {
 void FileReader::cleanQuit() {
 	
 	// cleanup heap for URLs
-	for (int i = 0; i < INITIAL_URL_COUNT; i++) {
+	/*for (int i = 0; i < INITIAL_URL_COUNT; i++) {
 		delete[] URLs[i];
-	}
-	delete[] URLs;
+	}*/
+	//delete[] URLs;
 
 	WSACleanup();
 	exit(-1);

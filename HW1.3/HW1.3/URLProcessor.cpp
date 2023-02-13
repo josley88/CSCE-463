@@ -317,7 +317,7 @@ bool URLProcessor::loadPage(LONG* downBytes, bool robots = false) {
 
 		}
 		else if (ret == 0) { // timeout
-			printf("\n\n\t********** failed with slow download of %d seconds\n", (time(NULL) - startTime) / 1000);
+			//printf("\n\n\t********** failed with slow download of %d seconds\n", (time(NULL) - startTime) / 1000);
 			return false;
 		}
 			

@@ -8,12 +8,12 @@
 
 namespace Utility {
 
-	int getURLs(int argc, char** argv, char*** URLs) {
+	int getURLs(int argc, char** argv, vector<char*>& URLs, FileReader& reader) {
 		
 		char filename[128] = { 0 };
 		int result = 0;
 
-		FileReader reader;
+		
 
 		switch (argc) {
 			case 1:
@@ -21,10 +21,11 @@ namespace Utility {
 				cleanQuit();
 
 			case 2: // URL input
-				memcpy_s((*URLs)[0], MAX_HOST_LEN, argv[1], strlen(argv[1]));
+				//memcpy_s((*URLs)[0], MAX_HOST_LEN, argv[1], strlen(argv[1]));
+				URLs.push_back(argv[1]);
 
 				// null terminate
-				(*URLs)[0][strlen(argv[1])] = 0;
+				//(*URLs)[0][strlen(argv[1])] = 0;
 
 				return 1;
 

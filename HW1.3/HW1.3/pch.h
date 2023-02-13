@@ -22,6 +22,10 @@
 #include <string>
 #include "fileapi.h"
 #include <queue>
+#include <vector>
+
+using std::vector;
+using std::string;
 
 #include "DNS.h"
 #include "URLProcessor.h"

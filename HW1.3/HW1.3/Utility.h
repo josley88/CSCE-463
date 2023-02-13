@@ -7,7 +7,7 @@
 #pragma once
 namespace Utility {
 	
-	int getURLs(int argc, char** argv, char*** URLs);
+	int getURLs(int argc, char** argv, vector<char*>& URLs, FileReader& reader);
 	void cleanQuit();
 };
 

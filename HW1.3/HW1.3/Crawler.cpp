@@ -99,7 +99,7 @@ UINT Crawler::crawlerThread() {
 			//!processor.printHeader()
 			) {
 
-			printf("URL: %s\n", URL2);
+			//printf("URL: %s\n", URL2);
 
 			// reset processor for the next URL
 			processor.nextURL();

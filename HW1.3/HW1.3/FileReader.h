@@ -22,7 +22,7 @@ class FileReader {
 
 
 		char* readFile(char* filename);
-		int extractURLs(char*** URLs);
+		int extractURLs(vector<char*>& URLs);
 		void printAt(int i);
 
 		~FileReader() {
