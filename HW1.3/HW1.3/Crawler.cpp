@@ -195,6 +195,16 @@ void Crawler::waitForThreads() {
 }
 
 void Crawler::printFinalStats() {
-	printf("Extracted %d URLs @ %d/s\n", extractedURLs, extractedURLs / ((clock() - startTime) / 1000));
-	printf("Total time: %d\n", ((clock() - startTime) / 1000));
+	
+	int totalTimeSec = clock() - startTime / 1000;
+
+	printf("Extracted %d URLs @ %d/s\n", extractedURLs, extractedURLs / totalTimeSec);
+	printf("Looked up %d DNS names @ %d/s\n", uniqueURLs, uniqueURLs / totalTimeSec);
+	printf("Attempted %d site robots @ %d/s\n", uniqueIPs, uniqueIPs / totalTimeSec);
+	printf("Crawled %d pages @ %d/s\n", extractedURLs, extractedURLs / totalTimeSec);
+	printf("Parsed %d links @ %d/s\n", extractedURLs, extractedURLs / totalTimeSec);
+
+
+
+	printf("Total time: %d\n", totalTimeSec);
 }
