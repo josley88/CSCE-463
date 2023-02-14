@@ -8,7 +8,7 @@
 class FileReader {
 
 	char* fileBuf;
-	char** URLs;
+	//char** URLs;
 
 	int numURLs = INITIAL_URL_COUNT;
 	int fileSize;

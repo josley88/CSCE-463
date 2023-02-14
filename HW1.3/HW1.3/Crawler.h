@@ -62,6 +62,8 @@ class Crawler {
 				Q.push(URLs.at(i));
 			}
 
+			URLs.clear();
+
 			queueSize = Q.size();
 
 		}
