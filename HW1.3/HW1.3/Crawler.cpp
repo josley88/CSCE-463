@@ -2,15 +2,17 @@
 #include "Crawler.h"
 
 UINT Crawler::statThread() {
+
 	WaitForSingleObject(finished, INFINITY);
 	int time_s = 0;
+	int prevTime_s = startTime;
 
 	while (!quitStats) {
 
 		Sleep(TIME_INTERVAL);
 
 
-		EnterCriticalSection(&criticalSection);
+		// EnterCriticalSection(&criticalSection);
 		
 		time_s = (clock() - startTime) / 1000;
 		
@@ -28,19 +30,21 @@ UINT Crawler::statThread() {
 			linksFound / 1000 // print 1K instead of 1000
 		);
 
-		float crawlSpeed = (successfulCrawledPages - prevSuccCrawlPages) / (TIME_INTERVAL / 1000.0);
+		float crawlSpeed = (successfulCrawledPages - prevSuccCrawlPages) / (time_s - prevTime_s);
 		//printf("\tCrawled pages: %d     Prev Crawled pages: %d\n", successfulCrawledPages, prevSuccCrawlPages);
 		prevSuccCrawlPages = successfulCrawledPages;
 
 		// get rate, then divide by 125,000 to convert from bytes per sec to megabits per sec
-		float downloadRate = (downBytes - prevDownBytes) / (TIME_INTERVAL / 1000.0) / 125000;
+		float downloadRate = (downBytes - prevDownBytes) / (time_s - prevTime_s) / 125000;
 		//printf("\tDownloaded kbits: %d     Prev Downloaded kbits: %d\n", downBytes / 125, prevDownBytes / 125);
 		prevDownBytes = downBytes;
+
+		prevTime_s = time_s;
 
 		//  *** crawling 0.0 pps @ 0.1 Mbps
 		printf("\t*** crawling %.1f pps @ %.1f Mbps\n\n", crawlSpeed, downloadRate);
 
-		LeaveCriticalSection(&criticalSection);
+		// LeaveCriticalSection(&criticalSection);
 	}
 
 	ReleaseSemaphore(finished, 1, NULL);
@@ -58,11 +62,17 @@ UINT Crawler::crawlerThread() {
 	char status[4];
 	char* URL;
 
+	while (activeThreads < numThreads) {
+		Sleep(500); // wait for all threads to be ready first
+	}
+
 	// keep going till the URL queue is empty
 	while (true) {
 
 		EnterCriticalSection(&criticalSection);
+
 		if (Q.empty()) {
+			LeaveCriticalSection(&criticalSection);
 			break;
 		}
 
@@ -108,34 +118,15 @@ UINT Crawler::crawlerThread() {
 		}
 	}
 
-
-	LeaveCriticalSection(&criticalSection);
-
 	ReleaseSemaphore(finished, 1, NULL);
-	activeThreads--;
+	InterlockedDecrement(&activeThreads);
+
 	return 0;
 
 }
 
 
 void Crawler::startThreads() {
-
-	// start the stat thread
-	stat = CreateThread(NULL, 0, [](LPVOID lpParam) -> DWORD {
-		Crawler* p = (Crawler*)lpParam;
-		return p->statThread();
-		}, this, 0, NULL);
-
-	if (stat == NULL) {
-		EnterCriticalSection(&criticalSection);
-		printf("Failed to create stat thread\n");
-		LeaveCriticalSection(&criticalSection);
-	}
-	else {
-		EnterCriticalSection(&criticalSection);
-		//printf("Starting stat thread\n");
-		LeaveCriticalSection(&criticalSection);
-	}
 
 	// create and start the crawler threads
 	for (int i = 0; i < numThreads; i++) {
@@ -145,18 +136,25 @@ void Crawler::startThreads() {
 			}, this, 0, NULL);
 
 		if (threads[i] == NULL) {
-			EnterCriticalSection(&criticalSection);
 			printf("Failed to create thread %d\n", i);
-			LeaveCriticalSection(&criticalSection);
 		}
 		else {
-			activeThreads++;
-			//EnterCriticalSection(&criticalSection);
-			//printf("Starting thread %d\n", i);
-			//LeaveCriticalSection(&criticalSection);
+			InterlockedIncrement(&activeThreads);
 		}
 		
 	}
+
+	// start the stat thread
+	stat = CreateThread(NULL, 0, [](LPVOID lpParam) -> DWORD {
+		Crawler* p = (Crawler*)lpParam;
+		return p->statThread();
+		}, this, 0, NULL);
+
+	if (stat == NULL) {
+		printf("Failed to create stat thread\n");
+	}
+
+	startTime = clock();
 
 }
 

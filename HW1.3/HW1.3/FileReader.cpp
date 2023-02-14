@@ -62,6 +62,8 @@ int FileReader::extractURLs(vector<char*>& URLs) {
 
 	// loop through tokens until EOF
 	while (token != NULL && token != "\0") {
+
+
 		//printf("%s\n", token);
 		//printf("%d\n", strlen(token));
 		
