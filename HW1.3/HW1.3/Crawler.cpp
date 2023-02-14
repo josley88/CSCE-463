@@ -5,7 +5,7 @@ UINT Crawler::statThread() {
 
 	WaitForSingleObject(finished, INFINITY);
 	int time_s = 0;
-	int prevTime_s = startTime;
+	int prevTime_s = 0;
 
 	while (!quitStats) {
 
@@ -30,12 +30,13 @@ UINT Crawler::statThread() {
 			linksFound / 1000 // print 1K instead of 1000
 		);
 
-		float crawlSpeed = (successfulCrawledPages - prevSuccCrawlPages) / (time_s - prevTime_s);
+		float crawlSpeed = (float) (successfulCrawledPages - prevSuccCrawlPages) / (float) (time_s - prevTime_s);
 		//printf("\tCrawled pages: %d     Prev Crawled pages: %d\n", successfulCrawledPages, prevSuccCrawlPages);
+		//printf("\tTime: %d    PrevTime: %d\n", time_s, prevTime_s);
 		prevSuccCrawlPages = successfulCrawledPages;
 
 		// get rate, then divide by 125,000 to convert from bytes per sec to megabits per sec
-		float downloadRate = (downBytes - prevDownBytes) / (time_s - prevTime_s) / 125000;
+		float downloadRate = (float) (downBytes - prevDownBytes) / (float) (time_s - prevTime_s) / 125000;
 		//printf("\tDownloaded kbits: %d     Prev Downloaded kbits: %d\n", downBytes / 125, prevDownBytes / 125);
 		prevDownBytes = downBytes;
 
