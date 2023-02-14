@@ -59,7 +59,7 @@ class URLProcessor {
 			allocatedSize = INITIAL_BUF_SIZE;
 		}
 
-		bool parseURL(char* URL);
+		bool parseURL(char* URL, LONG* tamuCount);
 		bool lookupDNS(LONG* uniqueURLs, LONG* successfulDNSLookups, LONG* uniqueIPs, bool reconnect);
 		bool connectToSite(bool robots);
 		bool loadPage(LONG* downBytes, LONG* crawlBytes, bool getHEAD);

@@ -34,6 +34,8 @@ class Crawler {
 	LONG crawlBytes;
 
 	LONG httpCodes[5];
+
+	LONG tamuCount;
 	
 
 	public:
@@ -56,6 +58,7 @@ class Crawler {
 			downBytes = 0;
 			prevDownBytes = 0;
 			crawlBytes = 0;
+			tamuCount = 0;
 
 			for (int i = 0; i < 5; i++) {
 				httpCodes[i] = 0;

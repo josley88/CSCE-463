@@ -110,7 +110,7 @@ UINT Crawler::crawlerThread() {
 
 		// try network functions and cleanup/continue if they fail
 		if (
-			!processor.parseURL(URL) ||
+			!processor.parseURL(URL, &tamuCount) ||
 			!processor.lookupDNS(&uniqueURLs, &successfulDNSLookups, &uniqueIPs, false) ||
 			!processor.connectToSite(true) ||
 
@@ -225,4 +225,5 @@ void Crawler::printFinalStats() {
 	printf("Parsed %d links @ %d/s\n", linksFound, linksFound / totalTimeSec);
 
 	printf("HTTP codes: 2xx = %d, 3xx = %d, 4xx = %d, 5xx = %d, other = %d\n", httpCodes[0], httpCodes[1], httpCodes[2], httpCodes[3], httpCodes[4]);
+	printf("TamuCount: %d", tamuCount)
 }

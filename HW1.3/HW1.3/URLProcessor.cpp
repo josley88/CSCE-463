@@ -7,7 +7,7 @@
 #include "pch.h"
 #pragma comment(lib, "ws2_32.lib")
 
-bool URLProcessor::parseURL(char* URL) {
+bool URLProcessor::parseURL(char* URL, LONG* tamuCount) {
 
 	// string pointing to an HTTP server (DNS name or IP)
 	//char str [] = "128.194.135.72";
@@ -100,6 +100,12 @@ bool URLProcessor::parseURL(char* URL) {
 
 
 	//printf("host %s, port %d, request %s%s\n", host, port, path, query);
+	char* tamu = strstr(host, "tamu.edu");
+	if (tamu != NULL && tamu[8] == NULL) {
+		//printf("%s\n", tamu);
+		InterlockedIncrement(tamuCount);
+	}
+	
 
 	return true;
 }
