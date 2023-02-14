@@ -61,12 +61,10 @@ UINT Crawler::crawlerThread() {
 	// keep going till the URL queue is empty
 	while (true) {
 
-		
+		EnterCriticalSection(&criticalSection);
 		if (Q.empty()) {
 			break;
 		}
-
-		EnterCriticalSection(&criticalSection);
 
 		// dequeue URL
 		URL = Q.front();
