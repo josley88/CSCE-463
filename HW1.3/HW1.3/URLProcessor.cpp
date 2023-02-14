@@ -7,7 +7,7 @@
 #include "pch.h"
 #pragma comment(lib, "ws2_32.lib")
 
-bool URLProcessor::parseURL(char* URL, LONG* tamuCount) {
+bool URLProcessor::parseURL(char* URL) {
 
 	// string pointing to an HTTP server (DNS name or IP)
 	//char str [] = "128.194.135.72";
@@ -103,7 +103,8 @@ bool URLProcessor::parseURL(char* URL, LONG* tamuCount) {
 	char* tamu = strstr(host, "tamu.edu");
 	if (tamu != NULL && tamu[8] == NULL) {
 		//printf("%s\n", tamu);
-		InterlockedIncrement(tamuCount);
+		//InterlockedIncrement(tamuCount);
+		isFromTamu = true;
 	}
 	
 
@@ -434,12 +435,35 @@ bool URLProcessor::incrementSuccCrawl(LONG* successfulCrawledPages) {
 	return true;
 }
 
-bool URLProcessor::parseHTML(HTMLParserBase* _parser, char* URL, LONG* linksFound) {
+bool URLProcessor::parseHTML(HTMLParserBase* _parser, char* URL, LONG* linksFound, LONG* fromTamu, LONG* notFromTamu) {
 	//printf("      + Parsing page... ");
 	time_ms = clock();
 	int numLinks = 0;
 
-	(*_parser).Parse(buf, curPos, URL, strlen(URL), &numLinks);
+	char* links = (*_parser).Parse(buf, curPos, URL, strlen(URL), &numLinks);
+
+	char* cursor = links;
+
+	//printf("%s\n", links);
+
+	while (cursor != NULL) {
+		char* tamu = strstr(cursor, "tamu.edu");
+		if (tamu != NULL ) {
+			printf("%s\n", tamu);
+			//InterlockedIncrement(tamuCount);
+			cursor = tamu + strlen(tamu);
+			
+			if (isFromTamu) {
+				InterlockedIncrement(fromTamu);
+			} else {
+				InterlockedIncrement(notFromTamu);
+			}
+
+		} else {
+			break;
+		}
+	}
+	
 
 	InterlockedAdd(linksFound, numLinks);
 

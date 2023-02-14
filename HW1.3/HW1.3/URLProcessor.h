@@ -43,6 +43,8 @@ class URLProcessor {
 
 	clock_t time_ms;
 
+	bool isFromTamu;
+
 	public:
 
 		URLProcessor(char*** _URLs) {
@@ -51,15 +53,19 @@ class URLProcessor {
 			urlIndex = 0;
 			buf = new char[INITIAL_BUF_SIZE];
 			allocatedSize = INITIAL_BUF_SIZE;
+
+			isFromTamu = false;
 		}
 
 		URLProcessor() {
 			urlIndex = 0;
 			buf = new char[INITIAL_BUF_SIZE];
 			allocatedSize = INITIAL_BUF_SIZE;
+
+			isFromTamu = false;
 		}
 
-		bool parseURL(char* URL, LONG* tamuCount);
+		bool parseURL(char* URL);
 		bool lookupDNS(LONG* uniqueURLs, LONG* successfulDNSLookups, LONG* uniqueIPs, bool reconnect);
 		bool connectToSite(bool robots);
 		bool loadPage(LONG* downBytes, LONG* crawlBytes, bool getHEAD);
@@ -67,7 +73,7 @@ class URLProcessor {
 		bool incrementRobots(LONG* passedRobots);
 		bool separateHeader();
 		bool incrementSuccCrawl(LONG* successfulCrawledPages);
-		bool parseHTML(HTMLParserBase* _parser, char* URL, LONG* _extractedURLs);
+		bool parseHTML(HTMLParserBase* _parser, char* URL, LONG* _extractedURLs, LONG* fromTamu, LONG* notFromTamu);
 		bool printHeader();
 		void printBody();
 		void nextURL();
