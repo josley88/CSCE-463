@@ -62,7 +62,7 @@ class URLProcessor {
 		bool parseURL(char* URL);
 		bool lookupDNS(LONG* uniqueURLs, LONG* successfulDNSLookups, LONG* uniqueIPs, bool reconnect);
 		bool connectToSite(bool robots);
-		bool loadPage(LONG* downBytes, bool getHEAD);
+		bool loadPage(LONG* downBytes, LONG* crawlBytes, bool getHEAD);
 		bool verifyHeader(char* _status, char expectedCode);
 		bool incrementRobots(LONG* passedRobots);
 		bool separateHeader();

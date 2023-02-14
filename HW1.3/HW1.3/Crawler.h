@@ -9,6 +9,7 @@ class Crawler {
 
 	HANDLE finished;
 	bool quitStats;
+	bool statsReady;
 
 	CRITICAL_SECTION criticalSection;
 
@@ -30,6 +31,7 @@ class Crawler {
 	LONG linksFound;
 	LONG downBytes;
 	LONG prevDownBytes;
+	LONG crawlBytes;
 	
 
 	public:
@@ -49,8 +51,12 @@ class Crawler {
 			successfulCrawledPages = 0;
 			prevSuccCrawlPages = 0;
 			linksFound = 0;
+			downBytes = 0;
+			prevDownBytes = 0;
+			crawlBytes = 0;
 
 			quitStats = false;
+			statsReady = false;
 			
 			InitializeCriticalSection(&criticalSection);
 			threads = new HANDLE[numThreads];

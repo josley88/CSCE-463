@@ -16,19 +16,38 @@ UINT Crawler::statThread() {
 		
 		time_s = (clock() - startTime) / 1000;
 		
-		// print stats
-		printf("[%3d] %3d Q%6d E %7d H%6d D%6d I%5d R%5d C%5d L%4dK\n",
-			time_s,
-			activeThreads,
-			queueSize,
-			extractedURLs,
-			uniqueURLs,
-			successfulDNSLookups,
-			uniqueIPs,
-			passedRobots,
-			successfulCrawledPages,
-			linksFound / 1000 // print 1K instead of 1000
-		);
+		if (linksFound < 1000) {
+			// print stats for 0-1000 links
+			printf("[%3d] %3d Q%6d E %7d H%6d D%6d I%5d R%5d C%5d L%4d\n",
+				time_s,
+				activeThreads,
+				queueSize,
+				extractedURLs,
+				uniqueURLs,
+				successfulDNSLookups,
+				uniqueIPs,
+				passedRobots,
+				successfulCrawledPages,
+				linksFound
+			);
+		} else {
+			// print stats for 1000+ links
+			printf("[%3d] %3d Q%6d E %7d H%6d D%6d I%5d R%5d C%5d L%4dK\n",
+				time_s,
+				activeThreads,
+				queueSize,
+				extractedURLs,
+				uniqueURLs,
+				successfulDNSLookups,
+				uniqueIPs,
+				passedRobots,
+				successfulCrawledPages,
+				linksFound / 1000 // print 1K instead of 1000
+			);
+		}
+		
+
+		
 
 		float crawlSpeed = (float) (successfulCrawledPages - prevSuccCrawlPages) / (float) (time_s - prevTime_s);
 		//printf("\tCrawled pages: %d     Prev Crawled pages: %d\n", successfulCrawledPages, prevSuccCrawlPages);
@@ -63,7 +82,7 @@ UINT Crawler::crawlerThread() {
 	char status[4];
 	char* URL;
 
-	while (activeThreads < numThreads) {
+	while (!statsReady) {
 		Sleep(500); // wait for all threads to be ready first
 	}
 
@@ -96,7 +115,7 @@ UINT Crawler::crawlerThread() {
 			!processor.connectToSite(true) ||
 
 			// load Robots first
-			!processor.loadPage(&downBytes, true) ||
+			!processor.loadPage(&downBytes, &crawlBytes, true) ||
 			!processor.separateHeader() ||
 			!processor.verifyHeader(status, '4') ||
 			!processor.incrementRobots(&passedRobots) || // only reached if the robots checks passed
@@ -104,7 +123,7 @@ UINT Crawler::crawlerThread() {
 			// load page if robots passed
 			!processor.lookupDNS(&uniqueURLs, &successfulDNSLookups, &uniqueIPs, true) ||
 			!processor.connectToSite(false) ||
-			!processor.loadPage(&downBytes, false) ||
+			!processor.loadPage(&downBytes, &crawlBytes, false) ||
 			!processor.separateHeader() ||
 			!processor.verifyHeader(status, '2') ||
 			!processor.incrementSuccCrawl(&successfulCrawledPages) || // only reached if the page response is valid
@@ -155,6 +174,8 @@ void Crawler::startThreads() {
 		printf("Failed to create stat thread\n");
 	}
 
+	statsReady = true;
+
 	startTime = clock();
 
 }
@@ -195,15 +216,11 @@ void Crawler::waitForThreads() {
 
 void Crawler::printFinalStats() {
 	
-	int totalTimeSec = clock() - startTime / 1000;
+	int totalTimeSec = (clock() - startTime) / 1000;
 
 	printf("Extracted %d URLs @ %d/s\n", extractedURLs, extractedURLs / totalTimeSec);
 	printf("Looked up %d DNS names @ %d/s\n", uniqueURLs, uniqueURLs / totalTimeSec);
 	printf("Attempted %d site robots @ %d/s\n", uniqueIPs, uniqueIPs / totalTimeSec);
-	printf("Crawled %d pages @ %d/s\n", extractedURLs, extractedURLs / totalTimeSec);
-	printf("Parsed %d links @ %d/s\n", extractedURLs, extractedURLs / totalTimeSec);
-
-
-
-	printf("Total time: %d\n", totalTimeSec);
+	printf("Crawled %d pages @ %d/s (%.2f MB)\n", successfulCrawledPages, successfulCrawledPages / totalTimeSec, (float) crawlBytes / 1000000);
+	printf("Parsed %d links @ %d/s\n", linksFound, linksFound / totalTimeSec);
 }

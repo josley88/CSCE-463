@@ -168,6 +168,7 @@ bool URLProcessor::lookupDNS(LONG* uniqueURLs, LONG* successfulDNSLookups, LONG*
 			}
 			else {
 				InterlockedIncrement(successfulDNSLookups);
+				InterlockedIncrement(uniqueIPs);
 				//printf("passed\n");
 			}
 			
@@ -224,7 +225,7 @@ bool URLProcessor::connectToSite(bool robots = false) {
 }
 
 
-bool URLProcessor::loadPage(LONG* downBytes, bool robots = false) {
+bool URLProcessor::loadPage(LONG* downBytes, LONG* crawlBytes, bool robots) {
 
 	if (robots) {
 		maxDownloadSize = 16000;
@@ -346,6 +347,10 @@ bool URLProcessor::loadPage(LONG* downBytes, bool robots = false) {
 	//printf("%s\n", buf);
 
 	InterlockedAdd(downBytes, totalRecievedBytes);
+
+	if (!robots) {
+		InterlockedAdd(crawlBytes, totalRecievedBytes);
+	}
 
 	return true;
 }
