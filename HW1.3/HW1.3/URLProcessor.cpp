@@ -331,6 +331,8 @@ bool URLProcessor::loadPage(LONG* downBytes, LONG* crawlBytes, bool robots) {
 	char tmp[6] = "";
 	memcpy(tmp, buf, 5);
 
+
+
 	if (strcmp(http, tmp) != 0) {
 		//printf("failed with non-HTTP header (does not begin with HTTP/)\n");
 		//printf("Header: %s", buf);
@@ -356,9 +358,35 @@ bool URLProcessor::loadPage(LONG* downBytes, LONG* crawlBytes, bool robots) {
 }
 
 
-bool URLProcessor::verifyHeader(char* _status, char expectedCode) {	
+bool URLProcessor::verifyHeader(char* _status, char expectedCode, LONG* httpCodes, bool robots) {
 	char tmp[] = {headerBuf[9], headerBuf[10], headerBuf[11], '\0'};
 	memcpy(_status, tmp, 4);
+
+	if (!robots) {
+
+		switch (_status[0]) {
+			case '2':
+				InterlockedIncrement(&(httpCodes[0]));
+				//printf("Code: %s     httpCodes[0]: %d\n", _status, httpCodes[0]);
+				break;
+			case '3':
+				InterlockedIncrement(&(httpCodes[1]));
+				//printf("Code: %s     httpCodes[1]: %d\n", _status, httpCodes[1]);
+				break;
+			case '4':
+				InterlockedIncrement(&(httpCodes[2]));
+				//printf("Code: %s     httpCodes[2]: %d\n", _status, httpCodes[2]);
+				break;
+			case '5':
+				InterlockedIncrement(&(httpCodes[3]));
+				//printf("Code: %s     httpCodes[3]: %d\n", _status, httpCodes[3]);
+				break;
+			default:
+				InterlockedIncrement(&(httpCodes[4]));
+				//printf("Code: %s     httpCodes[4]: %d\n", _status, httpCodes[4]);
+				break;
+		}
+	}
 
 	//printf("\tVerifying header... status code %s\n", _status);
 	//printf("\tExpecting code %cXX\n", expectedCode);

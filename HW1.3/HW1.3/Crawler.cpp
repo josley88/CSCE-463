@@ -117,7 +117,7 @@ UINT Crawler::crawlerThread() {
 			// load Robots first
 			!processor.loadPage(&downBytes, &crawlBytes, true) ||
 			!processor.separateHeader() ||
-			!processor.verifyHeader(status, '4') ||
+			!processor.verifyHeader(status, '4', httpCodes, true) ||
 			!processor.incrementRobots(&passedRobots) || // only reached if the robots checks passed
 
 			// load page if robots passed
@@ -125,7 +125,7 @@ UINT Crawler::crawlerThread() {
 			!processor.connectToSite(false) ||
 			!processor.loadPage(&downBytes, &crawlBytes, false) ||
 			!processor.separateHeader() ||
-			!processor.verifyHeader(status, '2') ||
+			!processor.verifyHeader(status, '2', httpCodes, false) ||
 			!processor.incrementSuccCrawl(&successfulCrawledPages) || // only reached if the page response is valid
 			!processor.parseHTML(&parser, URL, &linksFound) // ||
 			//!processor.printHeader()
@@ -223,4 +223,6 @@ void Crawler::printFinalStats() {
 	printf("Attempted %d site robots @ %d/s\n", uniqueIPs, uniqueIPs / totalTimeSec);
 	printf("Crawled %d pages @ %d/s (%.2f MB)\n", successfulCrawledPages, successfulCrawledPages / totalTimeSec, (float) crawlBytes / 1000000);
 	printf("Parsed %d links @ %d/s\n", linksFound, linksFound / totalTimeSec);
+
+	printf("HTTP codes: 2xx = %d, 3xx = %d, 4xx = %d, 5xx = %d, other = %d\n", httpCodes[0], httpCodes[1], httpCodes[2], httpCodes[3], httpCodes[4]);
 }
