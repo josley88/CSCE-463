@@ -436,33 +436,36 @@ bool URLProcessor::incrementSuccCrawl(LONG* successfulCrawledPages) {
 }
 
 bool URLProcessor::parseHTML(HTMLParserBase* _parser, char* URL, LONG* linksFound, LONG* fromTamu, LONG* notFromTamu) {
+	
+	
+	
 	//printf("      + Parsing page... ");
 	time_ms = clock();
 	int numLinks = 0;
 
-	char* links = (*_parser).Parse(buf, curPos, URL, strlen(URL), &numLinks);
+	char* links =  (*_parser).Parse(buf, curPos, URL, strlen(URL), &numLinks);
 
-	char* cursor = links;
+	//char* cursor = links;
 
-	//printf("%s\n", links);
+	printf("%s\n", links);
 
-	while (cursor != NULL) {
-		char* tamu = strstr(cursor, "tamu.edu");
-		if (tamu != NULL ) {
-			printf("%s\n", tamu);
-			//InterlockedIncrement(tamuCount);
-			cursor = tamu + strlen(tamu);
-			
-			if (isFromTamu) {
-				InterlockedIncrement(fromTamu);
-			} else {
-				InterlockedIncrement(notFromTamu);
-			}
+	//while (cursor != NULL) {
+	//	char* tamu = strstr(cursor, "tamu.edu");
+	//	if (tamu != NULL ) {
+	//		//printf("Hooray!!!!!!!!!!!!! %s\n", tamu);
+	//		//InterlockedIncrement(tamuCount);
+	//		cursor = tamu + strlen(tamu);
+	//		
+	//		if (isFromTamu) {
+	//			InterlockedIncrement(fromTamu);
+	//		} else {
+	//			InterlockedIncrement(notFromTamu);
+	//		}
 
-		} else {
-			break;
-		}
-	}
+	//	} else {
+	//		break;
+	//	}
+	//}
 	
 
 	InterlockedAdd(linksFound, numLinks);

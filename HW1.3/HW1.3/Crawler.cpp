@@ -225,5 +225,5 @@ void Crawler::printFinalStats() {
 	printf("Parsed %d links @ %d/s\n", linksFound, linksFound / totalTimeSec);
 
 	printf("HTTP codes: 2xx = %d, 3xx = %d, 4xx = %d, 5xx = %d, other = %d\n", httpCodes[0], httpCodes[1], httpCodes[2], httpCodes[3], httpCodes[4]);
-	printf("To TAMU - fromTAMU: %d    notFromTAMU: %d", fromTamu, notFromTamu);
+	//printf("To TAMU - fromTAMU: %d    notFromTAMU: %d", fromTamu, notFromTamu);
 }
