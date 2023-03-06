@@ -181,9 +181,99 @@ void DNSWorker::recvPacket(char** recvBuf) {
 		printf("Response port or server mismatch!\n");
 	}
 
-	fixeDNSAnsHeader = (FixedDNSHeader*) (*recvBuf);
+	fixedDNSAnsHeader = (FixedDNSHeader*) (*recvBuf);
 	printf("response in %d ms with %d bytes\n", clock() - startTime, receivedBytes);
-	printf("ID: %.4X\n", fixeDNSAnsHeader->ID);
+	printf(
+		"  TXID 0x%.4X, flags 0x%.4X, questions %d, answers %d, authority %d, additional %d\n",
+		ntohs(fixedDNSAnsHeader->ID), 
+		ntohs(fixedDNSAnsHeader->flags), 
+		ntohs(fixedDNSAnsHeader->questions),
+		ntohs(fixedDNSAnsHeader->answers),
+		ntohs(fixedDNSAnsHeader->authRRs),
+		ntohs(fixedDNSAnsHeader->addRRs)
+	);
+
+	uint8_t replyCode = ntohs(fixedDNSAnsHeader->flags) & 0x000F;
+	
+	if (replyCode != 0) {
+		printf("  failed with Rcode = %d\n", replyCode);
+		quit();
+	}
+	else {
+		printf("  succeeded with Rcode = %d\n", replyCode);
+	}
+	
+}
+
+void DNSWorker::parsePacket(char** recvBuf) {
+	
+	int numQuestions = ntohs(fixedDNSAnsHeader->questions);
+	char** qSections = new char*[numQuestions];
+
+	int numAnswers = ntohs(fixedDNSAnsHeader->answers);
+	char** aSections = new char* [numAnswers];
+	
+	// parse Questions
+	for (int q = 0; q < numQuestions; q++) {
+		char* question = (*recvBuf) + sizeof(FixedDNSHeader) + 1;
+		int length = strlen(question);
+		qSections[q] = question;
+
+		for (u_int i = 0; i < length; i++) {
+			if (question[i] < '0') {
+				question[i] = '.';
+			}
+		}
+	}
+	
+
+	printf("  ------------ [questions] ----------\n");
+	
+	for (int i = 0; i < numQuestions; i++) {
+		QueryHeader* currentHeader = (QueryHeader*) (qSections[i] + strlen(qSections[i]) + 1);
+
+		printf("  \t%s type %d class %d\n", 
+			qSections[i],
+			ntohs(currentHeader->qType),
+			ntohs(currentHeader->qClass)
+		);
+	}
+
+
+
+	// parse Answers
+	for (int q = 0; q < numAnswers; q++) {
+		char* answer = (*recvBuf) + sizeof(FixedDNSHeader) + 1;
+		int length = strlen(answer);
+		aSections[q] = answer;
+
+		for (u_int i = 0; i < length; i++) {
+			if (answer[i] < '0') {
+				answer[i] = '.';
+			}
+		}
+	}
+
+
+	printf("  ------------ [answers] ----------\n");
+
+	for (int i = 0; i < numAnswers; i++) {
+		DNSAnswerHeader* currentHeader = (DNSAnswerHeader*)(aSections[i] + strlen(aSections[i]) + 1);
+
+		printf("  \t%s type %d class %d\n",
+			aSections[i],
+			ntohs(currentHeader->aType),
+			ntohs(currentHeader->aClass)
+		);
+	}
+
+
+
+
+
+
+	delete[] aSections;
+	delete[] qSections;
 }
 
 

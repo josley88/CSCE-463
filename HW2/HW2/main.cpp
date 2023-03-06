@@ -36,6 +36,7 @@ int main(int argc, char** argv) {
 	dns.openSocket();
 	if (dns.sendPacket(&sendBuf, packetSize)) {
 		dns.recvPacket(&recvBuf);
+		dns.parsePacket(&recvBuf);
 	}
 	else {
 		printf("");

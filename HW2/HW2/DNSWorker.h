@@ -37,8 +37,8 @@ public:
 
 class DNSAnswerHeader {
 public:
-	USHORT type;
-	USHORT classs;
+	USHORT aType;
+	USHORT aClass;
 	UINT   TTL;
 	USHORT len;
 };
@@ -60,7 +60,7 @@ public:
 
 	QueryHeader* qHeader;
 	FixedDNSHeader* dnsQHeader;
-	FixedDNSHeader* fixeDNSAnsHeader;
+	FixedDNSHeader* fixedDNSAnsHeader;
 	DNSAnswerHeader* dnsAnsHeader;
 
 	clock_t startTime;
@@ -84,6 +84,7 @@ public:
 	void formPacket(char** sendBuf, int packetSize, bool isHost);
 	bool sendPacket(char** sendBuf, int packetSize);
 	void recvPacket(char** recvBuf);
+	void parsePacket(char** recvBuf);
 	void printQuery(char* originalHost);
 	void quit();
 };
