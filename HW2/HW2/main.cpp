@@ -12,15 +12,28 @@ int main(int argc, char** argv) {
 	}
 	
 	DNSWorker dns(argv);
+	bool isHost = false;
+	int packetSize = 0;
 
-	int packetSize = strlen(dns.host) + 2 + sizeof(DNSQuestionHeader) + sizeof(QueryHeader);
+	if (inet_addr(dns.host) != INADDR_NONE) {
+		
+		packetSize = strlen(dns.host) + 2 + strlen(".in-addr.arpa") + sizeof(DNSQuestionHeader) + sizeof(QueryHeader);
+	}
+	else {
+		isHost = true;
+		packetSize = strlen(dns.host) + 2 + sizeof(DNSQuestionHeader) + sizeof(QueryHeader);
+	}
+
+	
 	char* sendBuf = new char[packetSize];
 	memset(sendBuf, 0, packetSize);
 
 	
 
-	dns.formPacket(&sendBuf, packetSize);
+	dns.formPacket(&sendBuf, packetSize, isHost);
 	dns.openSocket();
 	dns.sendPacket(&sendBuf, packetSize);
 	dns.printQuery();
+
+	delete[] sendBuf;
 }

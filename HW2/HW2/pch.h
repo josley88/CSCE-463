@@ -21,7 +21,6 @@
 #include <winsock.h>
 #include <ctime>
 #include <string>
-#include "fileapi.h"
 #include <iostream>
 
 #include "DNSWorker.h"

@@ -8,7 +8,31 @@
 
 using std::string;
 
-void DNSWorker::formPacket(char** sendBuf, int packetSize) {
+void reformatIP(char** IPAddr) {
+	string list[4];
+	string IPAddrString = string(*IPAddr);
+	//std::cout << IPAddrString << std::endl;
+	UINT cursor = 0;
+
+	int counter = 3;
+	for (int i = 0; i < IPAddrString.length(); i++) {
+		if ((*IPAddr)[i] == '.') {
+			list[counter--] = IPAddrString.substr(cursor, i - cursor);
+			i++;
+			cursor = i;
+		}
+	}
+	list[counter] = IPAddrString.substr(cursor, IPAddrString.length() - cursor);
+
+	std::cout << "TEST 1: " << IPAddrString.c_str() << std::endl;
+	IPAddrString = list[0] + "." + list[1] + "." + list[2] + "." + list[3] + ".in-addr.arpa";
+	std::cout << "TEST 2: " << IPAddrString.c_str() << std::endl;
+
+	memcpy((*IPAddr), IPAddrString.c_str(), strlen(IPAddrString.c_str()));
+	(*IPAddr)[strlen(IPAddrString.c_str()) + 1] = 0;
+}
+
+void DNSWorker::formPacket(char** sendBuf, int packetSize, bool isHost) {
 	
 	dnsQHeader = (DNSQuestionHeader*)(*sendBuf);
 	qHeader = (QueryHeader*)((*sendBuf) + packetSize - sizeof(QueryHeader));
@@ -17,50 +41,70 @@ void DNSWorker::formPacket(char** sendBuf, int packetSize) {
 	dnsQHeader->flags = htons(DNS_QUERY | DNS_RD);
 	dnsQHeader->questions = htons(1);
 
-	if (inet_addr(host) != INADDR_NONE) {
-		qTypeStr = "A";
-		qHeader->qType = htons(1);
+	char* tempHost = new char[256];
+	memcpy(tempHost, host, strlen(host));
+	tempHost[strlen(host)] = 0;
+	host = tempHost;
+
+	// reformat host or IP and add to packet;
+	if (!isHost) {
+		qTypeStr = "12";
+		qHeader->qType = htons(12);
+		qHeader->qClass = htons(1);
+		reformatIP(&host);
 	}
 	else {
-		qTypeStr = "PTR";
+		qTypeStr = "1";
 		qHeader->qType = htons(1);
+		qHeader->qClass = htons(1);
 	}
 
-	qHeader->qClass = htons(1);
+		USHORT hostLength = strlen(host);
 
-	USHORT hostLength = strlen(host);
+		// convert hostname to DNS format
+		//printf("Size: %d\n", hostLength);
+		char* dnsName = new char[hostLength + 2];
+		memcpy(dnsName + 1, host, hostLength);
+		dnsName[0] = '.';
 
-	// convert hostname to DNS format
-	printf("Size: %d\n", hostLength);
-	char* dnsName = new char[hostLength + 2];
-	memcpy(dnsName + 1, host, hostLength);
-	dnsName[0] = '.';
-	
-	int length = 0;
-	int lastLengthPos = 0;
+		int length = 0;
+		int lastLengthPos = 0;
 
-	// for each character in dnsName, replace '.' with the length of the following characters before the next '.'
-	for (int i = 0; i < hostLength + 1; i++) {
-		if (dnsName[i] == '.') {
+		// for each character in dnsName, replace '.' with the length of the following characters before the next '.'
+		for (int i = 0; i < hostLength + 1; i++) {
+			if (dnsName[i] == '.') {
+				dnsName[lastLengthPos] = length;
+				length = 0;
+				lastLengthPos = i;
+			}
+			else {
+				length++;
+			}
+		}
+		if (isHost) {
 			dnsName[lastLengthPos] = length;
-			length = 0;
-			lastLengthPos = i;
 		}
 		else {
-			length++;
+			dnsName[lastLengthPos] = length - 1;
 		}
-	}
-	dnsName[lastLengthPos] = length;
-	dnsName[hostLength + 1] = 0;
-	
-	printf("DNS Name: %s\n", dnsName);
+		
+		dnsName[hostLength + 1] = 0;
 
-	
+		//printf("DNS Name: %s\n", dnsName);
 
-	// Add the DNS question to the packet
-	char* questionPtr = (*sendBuf) + sizeof(DNSQuestionHeader);
-	memcpy(questionPtr, dnsName, hostLength + 2);
-	delete[] dnsName;
+
+		if (isHost) {
+			// Add the DNS question to the packet
+			char* questionPtr = (*sendBuf) + sizeof(DNSQuestionHeader);
+			memcpy(questionPtr, dnsName, hostLength + 2);
+		}
+		else {
+			// Add the DNS question to the packet
+			char* questionPtr = (*sendBuf) + sizeof(DNSQuestionHeader);
+			memcpy(questionPtr, dnsName, hostLength);
+		}
+		
+		delete[] dnsName;
 }
 
 void DNSWorker::openSocket() {
@@ -95,17 +139,6 @@ void DNSWorker::openSocket() {
 
 
 void DNSWorker::sendPacket(char** sendBuf, int packetSize) {
-
-	for (int i = 0; i < packetSize; ++i) {
-		printf("%X", (int)(*sendBuf)[i]);
-	}
-	printf("\n");
-	for (int i = 0; i < packetSize; ++i) {
-		printf("%c", (*sendBuf)[i]);
-	}
-	printf("\n");
-	
-
 	struct sockaddr_in remote;
 	memset(&remote, 0, sizeof(remote));
 	remote.sin_family = AF_INET;
@@ -116,7 +149,7 @@ void DNSWorker::sendPacket(char** sendBuf, int packetSize) {
 		quit();
 	}
 	else {
-		printf("Sending packet to %s\n", server);
+		//printf("Sending packet to %s\n", server);
 	}
 }
 
@@ -126,6 +159,7 @@ void DNSWorker::printQuery() {
 	printf("Lookup  : %s\n", host);
 	printf("Query   : %s, type %s, TXID 0x%.4X\n", host, qTypeStr.c_str(), txid);
 	printf("Server  : %s\n", server);
+	printf("********************************\n");
 }
 
 void DNSWorker::quit() {

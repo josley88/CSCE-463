@@ -70,12 +70,13 @@ public:
 	}
 
 	~DNSWorker() {
+		delete[] host;
 		closesocket(sock);
 	}
 
 	
 	void openSocket();
-	void formPacket(char** sendBuf, int packetSize);
+	void formPacket(char** sendBuf, int packetSize, bool isHost);
 	void sendPacket(char** sendBuf, int packetSize);
 	void printQuery();
 	void quit();
