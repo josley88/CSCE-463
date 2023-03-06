@@ -6,8 +6,7 @@
 
 #include "pch.h"
 
-int main(int argc, char** argv)
-{
+int main(int argc, char** argv) {
 
 	// check arguments for valid input
 	if (argc < 2) {
