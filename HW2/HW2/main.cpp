@@ -17,23 +17,31 @@ int main(int argc, char** argv) {
 
 	if (inet_addr(dns.host) != INADDR_NONE) {
 		
-		packetSize = strlen(dns.host) + 2 + strlen(".in-addr.arpa") + sizeof(DNSQuestionHeader) + sizeof(QueryHeader);
+		packetSize = strlen(dns.host) + 2 + strlen(".in-addr.arpa") + sizeof(FixedDNSHeader) + sizeof(QueryHeader);
 	}
 	else {
 		isHost = true;
-		packetSize = strlen(dns.host) + 2 + sizeof(DNSQuestionHeader) + sizeof(QueryHeader);
+		packetSize = strlen(dns.host) + 2 + sizeof(FixedDNSHeader) + sizeof(QueryHeader);
 	}
 
 	
 	char* sendBuf = new char[packetSize];
+	char* recvBuf = new char[MAX_DNS_SIZE];
 	memset(sendBuf, 0, packetSize);
 
 	
 
 	dns.formPacket(&sendBuf, packetSize, isHost);
+	dns.printQuery(argv[1]);
 	dns.openSocket();
-	dns.sendPacket(&sendBuf, packetSize);
-	dns.printQuery();
+	if (dns.sendPacket(&sendBuf, packetSize)) {
+		dns.recvPacket(&recvBuf);
+	}
+	else {
+		printf("");
+	}
+
+	
 
 	delete[] sendBuf;
 }

@@ -15,6 +15,8 @@
 #define DNS_RA (1 << 7) /* recursion available */
 
 #define MAX_DNS_SIZE 512 // largest valid UDP packet
+#define MAX_ATTEMPTS 3
+#define TIMEOUT 10
 
 #pragma pack(push, 1)
 class QueryHeader {
@@ -23,7 +25,7 @@ public:
 	USHORT qClass;
 };
 
-class DNSQuestionHeader {
+class FixedDNSHeader {
 public:
 	USHORT ID;
 	USHORT flags;
@@ -37,7 +39,7 @@ class DNSAnswerHeader {
 public:
 	USHORT type;
 	USHORT classs;
-	UINT TTL;
+	UINT   TTL;
 	USHORT len;
 };
 #pragma pack(pop)
@@ -52,13 +54,16 @@ public:
 	unsigned short txid;
 	std::string qTypeStr;
 
-	char* recvBuf;
-	unsigned int bufSize;
 
 	SOCKET sock;
+	struct sockaddr_in remote;
+
 	QueryHeader* qHeader;
-	DNSQuestionHeader* dnsQHeader;
-	DNSAnswerHeader* answerHeader;
+	FixedDNSHeader* dnsQHeader;
+	FixedDNSHeader* fixeDNSAnsHeader;
+	DNSAnswerHeader* dnsAnsHeader;
+
+	clock_t startTime;
 
 	DNSWorker(char** argv) {
 		host = argv[1];
@@ -66,7 +71,7 @@ public:
 		txid = 1;
 		qTypeStr = "";
 
-		bufSize = 0;
+		memset(&remote, 0, sizeof(remote));
 	}
 
 	~DNSWorker() {
@@ -77,7 +82,8 @@ public:
 	
 	void openSocket();
 	void formPacket(char** sendBuf, int packetSize, bool isHost);
-	void sendPacket(char** sendBuf, int packetSize);
-	void printQuery();
+	bool sendPacket(char** sendBuf, int packetSize);
+	void recvPacket(char** recvBuf);
+	void printQuery(char* originalHost);
 	void quit();
 };

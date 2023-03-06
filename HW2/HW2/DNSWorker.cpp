@@ -24,17 +24,17 @@ void reformatIP(char** IPAddr) {
 	}
 	list[counter] = IPAddrString.substr(cursor, IPAddrString.length() - cursor);
 
-	std::cout << "TEST 1: " << IPAddrString.c_str() << std::endl;
+	//std::cout << "TEST 1: " << IPAddrString.c_str() << std::endl;
 	IPAddrString = list[0] + "." + list[1] + "." + list[2] + "." + list[3] + ".in-addr.arpa";
-	std::cout << "TEST 2: " << IPAddrString.c_str() << std::endl;
+	//std::cout << "TEST 2: " << IPAddrString.c_str() << std::endl;
 
 	memcpy((*IPAddr), IPAddrString.c_str(), strlen(IPAddrString.c_str()));
-	(*IPAddr)[strlen(IPAddrString.c_str()) + 1] = 0;
+	(*IPAddr)[strlen(IPAddrString.c_str())] = 0;
 }
 
 void DNSWorker::formPacket(char** sendBuf, int packetSize, bool isHost) {
 	
-	dnsQHeader = (DNSQuestionHeader*)(*sendBuf);
+	dnsQHeader = (FixedDNSHeader*)(*sendBuf);
 	qHeader = (QueryHeader*)((*sendBuf) + packetSize - sizeof(QueryHeader));
 
 	dnsQHeader->ID = htons(txid);
@@ -85,24 +85,16 @@ void DNSWorker::formPacket(char** sendBuf, int packetSize, bool isHost) {
 			dnsName[lastLengthPos] = length;
 		}
 		else {
-			dnsName[lastLengthPos] = length - 1;
+			dnsName[lastLengthPos] = length;
 		}
 		
 		dnsName[hostLength + 1] = 0;
 
 		//printf("DNS Name: %s\n", dnsName);
 
-
-		if (isHost) {
-			// Add the DNS question to the packet
-			char* questionPtr = (*sendBuf) + sizeof(DNSQuestionHeader);
-			memcpy(questionPtr, dnsName, hostLength + 2);
-		}
-		else {
-			// Add the DNS question to the packet
-			char* questionPtr = (*sendBuf) + sizeof(DNSQuestionHeader);
-			memcpy(questionPtr, dnsName, hostLength);
-		}
+		// Add the DNS question to the packet
+		char* questionPtr = (*sendBuf) + sizeof(FixedDNSHeader);
+		memcpy(questionPtr, dnsName, hostLength + 1);
 		
 		delete[] dnsName;
 }
@@ -138,25 +130,65 @@ void DNSWorker::openSocket() {
 }
 
 
-void DNSWorker::sendPacket(char** sendBuf, int packetSize) {
-	struct sockaddr_in remote;
-	memset(&remote, 0, sizeof(remote));
+bool DNSWorker::sendPacket(char** sendBuf, int packetSize) {
 	remote.sin_family = AF_INET;
 	remote.sin_addr.s_addr = inet_addr(server); // server’s IP
 	remote.sin_port = htons(53); // DNS port on server
-	if (sendto(sock, (*sendBuf), packetSize, 0, (struct sockaddr*)&remote, sizeof(remote)) == SOCKET_ERROR) {
-		printf("Send error: %d\n", WSAGetLastError());
+
+	int count = 0;
+	while (count++ < MAX_ATTEMPTS) {
+		startTime = clock();
+		timeval timeout;
+		timeout.tv_sec = TIMEOUT;
+		timeout.tv_usec = 0;
+
+		printf("Attempt %d with %d bytes... ", count, packetSize);
+		if (sendto(sock, (*sendBuf), packetSize, 0, (struct sockaddr*)&remote, sizeof(remote)) == SOCKET_ERROR) {
+			printf("Send error: %d\n", WSAGetLastError());
+			quit();
+		}
+
+		fd_set fd;
+		FD_ZERO(&fd);
+		FD_SET(sock, &fd);
+		int available = select(0, &fd, NULL, NULL, &timeout);
+
+		// response ready
+		if (available > 0) {
+			return true;
+		}
+		else { // timeout
+			
+			printf("timeout in %d ms\n", clock() - startTime);
+		}
+	}
+
+	return false;
+}
+
+void DNSWorker::recvPacket(char** recvBuf) {
+
+	struct sockaddr_in response;
+
+	int responseSize = sizeof(response);
+	int receivedBytes = 0;
+	if ((receivedBytes = recvfrom(sock, (*recvBuf), MAX_DNS_SIZE, 0, (struct sockaddr*)&response, &responseSize)) == SOCKET_ERROR) {
+		printf("Receive error: %d\n", WSAGetLastError());
 		quit();
 	}
-	else {
-		//printf("Sending packet to %s\n", server);
+
+	if (response.sin_addr.S_un.S_addr != remote.sin_addr.S_un.S_addr || response.sin_port != remote.sin_port) {
+		printf("Response port or server mismatch!\n");
 	}
+
+	fixeDNSAnsHeader = (FixedDNSHeader*) (*recvBuf);
+	printf("response in %d ms with %d bytes\n", clock() - startTime, receivedBytes);
+	printf("ID: %.4X\n", fixeDNSAnsHeader->ID);
 }
 
 
-
-void DNSWorker::printQuery() {
-	printf("Lookup  : %s\n", host);
+void DNSWorker::printQuery(char* originalHost) {
+	printf("Lookup  : %s\n", originalHost);
 	printf("Query   : %s, type %s, TXID 0x%.4X\n", host, qTypeStr.c_str(), txid);
 	printf("Server  : %s\n", server);
 	printf("********************************\n");
