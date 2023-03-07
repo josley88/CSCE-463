@@ -1,4 +1,4 @@
-/* DNS.h
+/* DNSWorker.h
  * Joseph Shumway
  * CSCE 463
  * Spring 2023
@@ -51,7 +51,7 @@ public:
 
 	char* host;
 	char* server;
-	unsigned short txid;
+	USHORT txid;
 	std::string qTypeStr;
 
 
@@ -68,7 +68,9 @@ public:
 	DNSWorker(char** argv) {
 		host = argv[1];
 		server = argv[2];
-		txid = 1;
+		
+		srand(clock());
+		txid = rand();
 		qTypeStr = "";
 
 		memset(&remote, 0, sizeof(remote));

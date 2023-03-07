@@ -1,5 +1,8 @@
-// HW2.cpp : This file contains the 'main' function. Program execution begins and ends there.
-//
+/* main.cpp
+ * Joseph Shumway
+ * CSCE 463
+ * Spring 2023
+ */
 
 #include "pch.h"
 
