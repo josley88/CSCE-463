@@ -6,7 +6,8 @@
 
 #define MAGIC_PORT			22345
 #define MAX_PKT_SIZE		(1500-28)
-#define MAX_ATTEMPTS		3
+#define MAX_ATTEMPTS_SYN	3
+#define MAX_ATTEMPTS		5
 
 
 #define STATUS_OK			0	 // no error
@@ -97,7 +98,10 @@ class SenderSocket {
 		ReceiverHeader responseHeader;
 		int recvBytes;
 
+		bool connectionOpen;
+
 		struct sockaddr_in server;
+		char* ipString[15];
 		
 		SenderSocket(char** argv) {
 			
@@ -160,5 +164,6 @@ class SenderSocket {
 		int lookupDNS();
 		int close();
 
-
+		int secondsFromFloat(double time);
+		int microSecondsFromFloat(double time);
 };
