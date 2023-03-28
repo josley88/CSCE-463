@@ -132,7 +132,7 @@ void DNSWorker::openSocket() {
 
 bool DNSWorker::sendPacket(char** sendBuf, int packetSize) {
 	remote.sin_family = AF_INET;
-	remote.sin_addr.s_addr = inet_addr(server); // server’s IP
+	remote.sin_addr.s_addr = inet_addr(server); // servers IP
 	remote.sin_port = htons(53); // DNS port on server
 
 	int count = 0;

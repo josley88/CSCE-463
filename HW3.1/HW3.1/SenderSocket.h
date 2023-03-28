@@ -4,8 +4,9 @@
  * Spring 2023
  */
 
-#define MAGIC_PORT 22345
-#define MAX_PKT_SIZE (1500-28)
+#define MAGIC_PORT			22345
+#define MAX_PKT_SIZE		(1500-28)
+#define MAX_ATTEMPTS		3
 
 
 #define STATUS_OK			0	 // no error
@@ -46,35 +47,118 @@ class LinkProperties {
 		LinkProperties() { memset(this, 0, sizeof(*this)); }
 };
 
+class SenderDataHeader {
+	public:
+		Flags flags;
+		DWORD seq; // must begin from 0
+};
+
 class SenderSynHeader {
 	public:
 		SenderDataHeader sdh;
 		LinkProperties lp;
 };
 
-class SenderDataHeader {
-public:
-	Flags flags;
-	DWORD seq; // must begin from 0
-};
-
 class ReceiverHeader {
-public:
-	Flags flags;
-	DWORD recvWnd; // receiver window for flow control (in pkts)
-	DWORD ackSeq; // ack value = next expected sequence
+	public:
+		Flags flags;
+		DWORD recvWnd; // receiver window for flow control (in pkts)
+		DWORD ackSeq; // ack value = next expected sequence
 };
 
-#pragma push(pop)
+#pragma pack(pop)
 
 
 
 // socket class
 class SenderSocket {
-public:
-	int open(char* host, int port, int windowSize, int startTime);
-	int send(char* ptr, int numBytes);
-	int close();
+	
+
+	public:
+
+		char* targetHost;
+		int bufferSizePower;
+		int senderWindow;
+		double rtt;
+		double forwardLossRate;
+		double returnLossRate;
+		float bottleneckSpeed;
+		
+		int timeStarted;
+		int numRetransmissions = 3;
+		float RTO = 1;
+
+		SOCKET sock;
+		DWORD* dwordBuf;
+		UINT64 dwordBufSize;
+
+		SenderSynHeader syn;
+
+		ReceiverHeader responseHeader;
+		int recvBytes;
+
+		struct sockaddr_in server;
+		
+		SenderSocket(char** argv) {
+			
+
+			// initialize vars
+			timeStarted = clock();
+			targetHost = argv[1];
+			bufferSizePower = atoi(argv[2]);
+			senderWindow = atoi(argv[3]);
+			rtt = atof(argv[4]);
+			forwardLossRate = atof(argv[5]);
+			returnLossRate = atof(argv[6]);
+			bottleneckSpeed = atof(argv[7]);
+			dwordBufSize = (UINT64)1 << bufferSizePower;
+			dwordBuf = new DWORD[dwordBufSize];
+
+			timeStarted = clock();
+			recvBytes = 0;
+
+			// setup flags for SYN packet header
+			syn.sdh.flags.reserved = 0;
+			//syn->sdh.flags.ACK = 0;
+			syn.sdh.flags.SYN = 1;
+			//syn->sdh.flags.FIN = 0;
+			syn.sdh.seq = 0;
+
+			// setup flags for SYN link properties
+			syn.lp.RTT = rtt;
+			syn.lp.speed = 1e6 * bottleneckSpeed;
+			syn.lp.pLoss[0] = forwardLossRate;
+			syn.lp.pLoss[1] = returnLossRate;
+			syn.lp.bufferSize = senderWindow + numRetransmissions;
+
+			// print input parameters
+			printf("Main: sender W = %d, RTT %g sec, loss %g / %g, link %g Mbps\n",
+				senderWindow,
+				rtt,
+				forwardLossRate,
+				returnLossRate,
+				bottleneckSpeed
+			);
+
+			// initialize buffer
+			printf("Main: initializing DWORD array with 2^20 elements... ");
+			for (UINT64 i = 0; i < dwordBufSize; i++) {
+				dwordBuf[i] = i;
+			}
+			printf("done in %d ms\n", clock() - timeStarted);
+
+			//printf("SYN:   [[%d]]\n", syn.sdh.flags.SYN);
+		}
+
+		~SenderSocket() {
+			delete[] dwordBuf;
+		}
+
+		void quit();
+		int open();
+		int send(char* ptr, int numBytes);
+		int lookupDNS();
+		int close();
 
 
 };
