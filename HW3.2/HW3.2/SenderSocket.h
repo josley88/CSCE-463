@@ -109,7 +109,7 @@ class SenderSocket {
 
 		// multithreading vars
 		CRITICAL_SECTION criticalSection;
-		HANDLE* threads;
+		HANDLE worker;
 		HANDLE stat;
 		HANDLE finished;
 		LONG activeThreads;
@@ -156,7 +156,6 @@ class SenderSocket {
 			statsReady = false;
 
 			InitializeCriticalSection(&criticalSection);
-			threads = new HANDLE[numThreads];
 			finished = CreateSemaphore(NULL, 0, numThreads, NULL);
 
 
@@ -180,7 +179,6 @@ class SenderSocket {
 
 		~SenderSocket() {
 			delete[] dwordBuf;
-			delete[] threads;
 		}
 
 		void quit();

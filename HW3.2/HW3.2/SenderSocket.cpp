@@ -113,14 +113,17 @@ int SenderSocket::send(char* ptr, int numBytes, int windowBase) {
 	int timeSYNSent = 0;
 	int attempt = 0;
 
-	SenderDataHeader packet;
+	SenderDataHeader sdh;
 
-	packet.flags.reserved = 0;
-	packet.flags.SYN = 0;
-	packet.flags.FIN = 0;
-	packet.flags.ACK = windowBase;
+	sdh.flags.reserved = 0;
+	sdh.flags.SYN = 0;
+	sdh.flags.FIN = 0;
+	sdh.flags.ACK = 0;
+	sdh.seq = seq;
 
-	while (attempt++ < MAX_ATTEMPTS_SYN) {
+	char* packet = new char[MAX_PKT_SIZE];
+
+	while (attempt++ < MAX_ATTEMPTS) {
 
 		timeval timeout;
 		timeout.tv_sec = secondsFromFloat(RTO);
@@ -128,15 +131,15 @@ int SenderSocket::send(char* ptr, int numBytes, int windowBase) {
 
 		timeSYNSent = clock();
 
-		// printf("[%g] --> SYN %d (attempt %d of %d, RTO %.3f) to %s\n", (double)(clock() - timeStarted) / 1000,	counter, attempt, maxAttempts, RTO,	ipString);
+		printf("\n[%g] --> data %d (attempt %d of %d, RTO %.3f) to %s\n", (double)(clock() - timeStarted) / 1000, sdh.seq, attempt, maxAttempts, RTO, ipString);
 		
+		// create packet from header and data
+		memcpy(packet, &sdh, sizeof(SenderDataHeader));
+		memcpy(packet + sizeof(SenderDataHeader), ptr, numBytes);
 
-
+		// attempt send packet
 		if (sendto(sock, (char*)&packet, sizeof(SenderDataHeader), 0, (struct sockaddr*)&server, sizeof(server)) == SOCKET_ERROR) {
-			/*printf("[%g] --> failed sendto with %d\n",
-				(double)(clock() - timeStarted) / 1000,
-				WSAGetLastError()
-			);*/
+			delete[] packet;
 			return FAILED_SEND;
 		}
 
@@ -155,8 +158,10 @@ int SenderSocket::send(char* ptr, int numBytes, int windowBase) {
 		}
 	}
 
+	delete[] packet;
 
-	if (attempt > MAX_ATTEMPTS_SYN) {
+
+	if (attempt > MAX_ATTEMPTS) {
 		return TIMEOUT;
 	}
 
@@ -181,17 +186,21 @@ int SenderSocket::send(char* ptr, int numBytes, int windowBase) {
 		printf("Response port or server mismatch!\n");
 	}
 
-
-
-	if (responseHeader.flags.ACK == windowBase + 1) {
+	// double check ACK sequence is correct
+	if (responseHeader.flags.ACK && responseHeader.ackSeq == seq + 1) {
 
 		RTO = (((float)(clock() - timeSYNSent)) / 1000) * 3;
-		printf("[%g] <-- SYN-ACK %d window %d; setting initial RTO to %g\n",
+		printf("[%g] <-- ACK %d window %d, RTO %g\n",
 			(double)(clock() - timeStarted) / 1000,
 			responseHeader.ackSeq,
 			responseHeader.recvWnd,
 			RTO
 		);
+	}
+	else {
+
+		// wrong ACK sequence    TODO
+		return TIMEOUT;
 	}
 
 	connectionOpen = true;
@@ -432,50 +441,44 @@ UINT SenderSocket::workerThread() {
 	}
 
 	int status = 0;
-	UINT64 threadCursor;
-	UINT64 threadSeq;
 
 	// keep going till all packets are sent
 	while (true) {
 
 
 		// divvy out chunks to threads
-		EnterCriticalSection(&criticalSection);
+		//EnterCriticalSection(&criticalSection);
 
 		// quit if the end of the buffer is reached
 		if (cursor >= byteBufferSize) {
-			LeaveCriticalSection(&criticalSection);
+			//LeaveCriticalSection(&criticalSection);
 			break;
 		}
-
-		// set this thread's cursor
-		threadCursor = cursor;
-		threadSeq = seq;
 
 		// get size of next chunk and move the cursor forward for the next thread to use
 		int recvBytes = min(byteBufferSize - cursor, MAX_PKT_SIZE - sizeof(SenderDataHeader));
 		//printf("RecvBytes: %d\n", recvBytes);
 
-		cursor += recvBytes;
-		seq++;
+		
 
-		printf("threadCursor position: %d\n", (int) threadCursor);
-		printf("Main Cursor position: %d\n\n", (int) cursor);
+		//printf("Cursor position: %d\n", (int) cursor);
 
-		LeaveCriticalSection(&criticalSection);
+		//LeaveCriticalSection(&criticalSection);
 
 		
 
 		// send chunk into socket
-		if ((status = send(charBuf + threadCursor, recvBytes, )) != STATUS_OK) {
+		if ((status = send(charBuf + cursor, recvBytes, seq)) != STATUS_OK) {
 			// handle errors
 			printf("Thread: send failed with status %d\n", status);
 			break;
 		}
+
+		cursor += recvBytes;
+		seq++;
 	}
 
 	ReleaseSemaphore(finished, 1, NULL);
-	InterlockedDecrement(&activeThreads);
 
 	return 0;
 
@@ -485,19 +488,13 @@ UINT SenderSocket::workerThread() {
 void SenderSocket::startThreads() {
 
 	// create and start the crawler threads
-	for (int i = 0; i < numThreads; i++) {
-		threads[i] = CreateThread(NULL, 0, [](LPVOID lpParam) -> DWORD {
-			SenderSocket* p = (SenderSocket*)lpParam;
-			return p->workerThread();
-			}, this, 0, NULL);
+	worker = CreateThread(NULL, 0, [](LPVOID lpParam) -> DWORD {
+		SenderSocket* p = (SenderSocket*)lpParam;
+		return p->workerThread();
+		}, this, 0, NULL);
 
-		if (threads[i] == NULL) {
-			printf("Failed to create thread %d\n", i);
-		}
-		else {
-			InterlockedIncrement(&activeThreads);
-		}
-
+	if (worker == NULL) {
+		printf("Failed to create worker thread\n");
 	}
 
 	// start the stat thread
@@ -521,14 +518,12 @@ void SenderSocket::waitForThreads() {
 	// wait for threads to finish and close their handles
 	// WaitForMultipleObjects(numThreads, threads, TRUE, INFINITE);
 
-	for (int i = 0; i < numThreads; i++) {
-		if (threads[i] != NULL) {
-			WaitForSingleObject(threads[i], INFINITE);
-			CloseHandle(threads[i]);
-		}
-		else {
-			printf("Error: the handle for thread %d is null\n", i);
-		}
+	if (worker != NULL) {
+		WaitForSingleObject(worker, INFINITE);
+		CloseHandle(worker);
+	}
+	else {
+		printf("Error: the handle for worker is null\n");
 	}
 
 	quitStats = true;
