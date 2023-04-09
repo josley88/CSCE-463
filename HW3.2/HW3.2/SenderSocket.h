@@ -97,6 +97,8 @@ class SenderSocket {
 		SenderSynHeader syn;
 		ReceiverHeader responseHeader;
 		int recvBytes;
+		int numTimeouts;
+		int numFastRet;
 		bool connectionOpen;
 		struct sockaddr_in server;
 		char* ipString[15];
@@ -106,6 +108,10 @@ class SenderSocket {
 		UINT64 seq;
 		UINT64 byteBufferSize;
 		char* charBuf;
+		int sentBytes;
+		int totalSentBytes;
+		int prevSentBytes;
+		double obsRTT;
 
 		// multithreading vars
 		CRITICAL_SECTION criticalSection;
@@ -122,7 +128,11 @@ class SenderSocket {
 			
 
 			// initialize vars
-			timeStarted = clock();
+			charBuf, cursor, ipString, server, sock, stat, worker = NULL;
+			recvBytes, seq, numTimeouts, numFastRet, byteBufferSize, obsRTT = 0;
+			connectionOpen = false;
+
+			// initialize arg vars
 			targetHost = argv[1];
 			bufferSizePower = atoi(argv[2]);
 			senderWindow = atoi(argv[3]);
@@ -130,12 +140,11 @@ class SenderSocket {
 			forwardLossRate = atof(argv[5]);
 			returnLossRate = atof(argv[6]);
 			bottleneckSpeed = atof(argv[7]);
+
 			dwordBufSize = (UINT64)1 << bufferSizePower;
 			dwordBuf = new DWORD[dwordBufSize];
 
 			timeStarted = clock();
-			recvBytes = 0;
-			seq = 0;
 
 			// setup flags for SYN packet header
 			syn.sdh.flags.reserved = 0;
@@ -152,8 +161,7 @@ class SenderSocket {
 			// setup threads
 			numThreads = senderWindow;
 			activeThreads = 0;
-			quitStats = false;
-			statsReady = false;
+			quitStats, statsReady = false;
 
 			InitializeCriticalSection(&criticalSection);
 			finished = CreateSemaphore(NULL, 0, numThreads, NULL);

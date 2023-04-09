@@ -27,14 +27,7 @@ int SenderSocket::open() {
 
 		timeSYNSent = clock();
 
-		printf("[%g] --> SYN %d (attempt %d of %d, RTO %.3f) to %s\n",
-			(double)(clock() - timeStarted) / 1000,
-			counter,
-			attempt,
-			maxAttempts,
-			RTO,
-			ipString
-		);
+		//printf("[%g] --> SYN %d (attempt %d of %d, RTO %.3f) to %s\n",(double)(clock() - timeStarted) / 1000, counter, attempt, maxAttempts, RTO, ipString);
 		if (sendto(sock, (char*)&syn, sizeof(SenderSynHeader), 0, (struct sockaddr*)&server, sizeof(server)) == SOCKET_ERROR) {
 			printf("[%g] --> failed sendto with %d\n",
 				(double)(clock() - timeStarted) / 1000,
@@ -70,10 +63,7 @@ int SenderSocket::open() {
 	//printf("Receiving...\n");
 	int received = recvfrom(sock, (char*)&responseHeader, sizeof(ReceiverHeader), 0, (struct sockaddr*)&response, &responseSize);
 	if (received == SOCKET_ERROR) {
-		printf("[%g] <-- failed recvfrom with %d\n",
-			(double)(clock() - timeStarted) / 1000,
-			WSAGetLastError()
-		);
+		printf("[%g] <-- failed recvfrom with %d\n", (double)(clock() - timeStarted) / 1000, WSAGetLastError());
 		return FAILED_RECV;
 	}
 	else {
@@ -89,12 +79,7 @@ int SenderSocket::open() {
 	if (responseHeader.flags.ACK && responseHeader.flags.SYN) {
 
 		RTO =  (((float)(clock() - timeSYNSent)) / 1000) * 3;
-		printf("[%g] <-- SYN-ACK %d window %d; setting initial RTO to %g\n",
-			(double)(clock() - timeStarted) / 1000,
-			responseHeader.ackSeq,
-			responseHeader.recvWnd,
-			RTO
-		);
+		//printf("[%g] <-- SYN-ACK %d window %d; setting initial RTO to %g\n", (double)(clock() - timeStarted) / 1000, responseHeader.ackSeq, responseHeader.recvWnd, RTO);
 	}
 	
 	connectionOpen = true;
@@ -120,6 +105,7 @@ int SenderSocket::send(char* ptr, int numBytes, int windowBase) {
 	sdh.flags.FIN = 0;
 	sdh.flags.ACK = 0;
 	sdh.seq = seq;
+	int beginRoundTrip = 0;
 
 	char* packet = new char[MAX_PKT_SIZE];
 
@@ -131,14 +117,15 @@ int SenderSocket::send(char* ptr, int numBytes, int windowBase) {
 
 		timeSYNSent = clock();
 
-		printf("\n[%g] --> data %d (attempt %d of %d, RTO %.3f) to %s\n", (double)(clock() - timeStarted) / 1000, sdh.seq, attempt, maxAttempts, RTO, ipString);
+		//printf("\n[%g] --> data %d (attempt %d of %d, RTO %.3f) to %s\n", (double)(clock() - timeStarted) / 1000, sdh.seq, attempt, maxAttempts, RTO, ipString);
 		
 		// create packet from header and data
 		memcpy(packet, &sdh, sizeof(SenderDataHeader));
 		memcpy(packet + sizeof(SenderDataHeader), ptr, numBytes);
 
 		// attempt send packet
-		if (sendto(sock, (char*)&packet, sizeof(SenderDataHeader), 0, (struct sockaddr*)&server, sizeof(server)) == SOCKET_ERROR) {
+		beginRoundTrip = clock();
+		if (sendto(sock, packet, sizeof(SenderDataHeader), 0, (struct sockaddr*)&server, sizeof(server)) == SOCKET_ERROR) {
 			delete[] packet;
 			return FAILED_SEND;
 		}
@@ -158,10 +145,13 @@ int SenderSocket::send(char* ptr, int numBytes, int windowBase) {
 		}
 	}
 
+	obsRTT = (float)(clock() - beginRoundTrip) / 1000;
+
 	delete[] packet;
 
 
 	if (attempt > MAX_ATTEMPTS) {
+		numTimeouts++;
 		return TIMEOUT;
 	}
 
@@ -190,12 +180,7 @@ int SenderSocket::send(char* ptr, int numBytes, int windowBase) {
 	if (responseHeader.flags.ACK && responseHeader.ackSeq == seq + 1) {
 
 		RTO = (((float)(clock() - timeSYNSent)) / 1000) * 3;
-		printf("[%g] <-- ACK %d window %d, RTO %g\n",
-			(double)(clock() - timeStarted) / 1000,
-			responseHeader.ackSeq,
-			responseHeader.recvWnd,
-			RTO
-		);
+		//printf("[%g] <-- ACK %d window %d, RTO %g\n", (double)(clock() - timeStarted) / 1000, responseHeader.ackSeq, responseHeader.recvWnd, RTO);
 	}
 	else {
 
@@ -203,7 +188,7 @@ int SenderSocket::send(char* ptr, int numBytes, int windowBase) {
 		return TIMEOUT;
 	}
 
-	connectionOpen = true;
+	sentBytes += numBytes;
 
 	return STATUS_OK;
 }
@@ -403,20 +388,29 @@ UINT SenderSocket::statThread() {
 
 		Sleep(TIME_INTERVAL);
 
+		time_s = (clock() - timeStarted) / 1000;
 
 		EnterCriticalSection(&criticalSection);
 
-		//float crawlSpeed = (float) 0;//(successfulCrawledPages - prevSuccCrawlPages) / (float)(time_s - prevTime_s);
-		//printf("\tCrawled pages: %d     Prev Crawled pages: %d\n", successfulCrawledPages, prevSuccCrawlPages);
-		//printf("\tTime: %d    PrevTime: %d\n", time_s, prevTime_s);
-		//prevSuccCrawlPages = successfulCrawledPages;
-
 		// get rate, then divide by 125,000 to convert from bytes per sec to megabits per sec
-		//float downloadRate = (float)(downBytes - prevDownBytes) / (float)(time_s - prevTime_s) / 125000;
-		//printf("\tDownloaded kbits: %d     Prev Downloaded kbits: %d\n", downBytes / 125, prevDownBytes / 125);
-		//prevDownBytes = downBytes;
+		float downloadRate = (float)(sentBytes - prevSentBytes) / (float)(time_s - prevTime_s) / 125000;
+		prevSentBytes = sentBytes;
+		totalSentBytes += sentBytes;
 
-		//prevTime_s = time_s;
+
+		printf("[%2d] B %6d (%3.1f MB) N %6d T %d F %d W %d S %.3f Mbps RTT %.3f\n",
+			(int)(clock() - timeStarted) / 1000,
+			seq,
+			(float) totalSentBytes / 8000000, // TODO fix to match ex. output
+			seq + 1,
+			numTimeouts,
+			numFastRet,
+			senderWindow,  // TODO change to min(senderWindow, receiverWindow) aka effective window size
+			downloadRate,
+			obsRTT
+		);
+
+		prevTime_s = time_s;
 
 		//  *** crawling 0.0 pps @ 0.1 Mbps
 		//printf("\t*** crawling %.1f pps @ %.1f Mbps\n\n", crawlSpeed, downloadRate);
