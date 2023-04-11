@@ -29,10 +29,7 @@ int main(int argc, char** argv) {
 	else {
 		
 		printf("Main: connected to %s in %g sec, pkt size %d bytes\n", ss.targetHost, (float)(clock() - ss.timeStarted) / 1000, MAX_PKT_SIZE);
-		
-		ss.charBuf = (char*)ss.dwordBuf;
-		ss.byteBufferSize = ss.dwordBufSize << 2; // convert to bytes
-		ss.cursor = 0; // buffer position
+
 		int timeStartTransfer = clock();
 
 		// start threads and wait
@@ -49,8 +46,22 @@ int main(int argc, char** argv) {
 			exit(0);
 		}
 
-		printf("Main: transfer finished in %g sec", (float) transferTime / 1000);
-	}
+		float total = 0;
+		for (auto x : ss.downloadRateList) {
+			total += x;
+		}
+		total *= 1000;
+		total /= ss.downloadRateList.size();
 
+		Checksum cs;
+		DWORD checksum = cs.CRC32((unsigned char*) ss.charBuf, ss.byteBufferSize);
+
+		printf("Main: transfer finished in %g sec, %.2f Kbps, checksum %8X\n", (float) transferTime / 1000, total, checksum);
+
+
+
+
+		printf("Main: estRTT %.3f, ideal rate %.2f Kbps\n", ss.estRTT, ss.senderWindow * MAX_PKT_SIZE / ss.estRTT / 100);
+	}
 }
 

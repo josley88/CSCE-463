@@ -88,7 +88,7 @@ class SenderSocket {
 		
 		int timeStarted;
 		int numRetransmissions = 3;
-		float RTO = 1;
+		float RTO;
 
 		// connection vars
 		SOCKET sock;
@@ -112,6 +112,11 @@ class SenderSocket {
 		int totalSentBytes;
 		int prevSentBytes;
 		double obsRTT;
+		float estRTT;
+		float devRTT;
+		float downloadRate;
+		std::vector<float> downloadRateList;
+		int finalWindow;
 
 		// multithreading vars
 		CRITICAL_SECTION criticalSection;
@@ -128,9 +133,14 @@ class SenderSocket {
 			
 
 			// initialize vars
-			charBuf, cursor, ipString, server, sock, stat, worker = NULL;
+			charBuf = nullptr;
+			cursor = 0;
+			stat = nullptr;
+			worker = nullptr;
 			recvBytes, seq, numTimeouts, numFastRet, byteBufferSize, obsRTT = 0;
 			connectionOpen = false;
+			downloadRate = 0;
+			finalWindow = 0;
 
 			// initialize arg vars
 			targetHost = argv[1];
@@ -150,6 +160,7 @@ class SenderSocket {
 			syn.sdh.flags.reserved = 0;
 			syn.sdh.flags.SYN = 1;
 			syn.sdh.seq = 0;
+			RTO = max(1, rtt * 2);
 
 			// setup flags for SYN link properties
 			syn.lp.RTT = rtt;
@@ -177,12 +188,15 @@ class SenderSocket {
 			);
 
 			// initialize buffer
-			printf("Main: initializing DWORD array with 2^20 elements... ");
+			printf("Main: initializing DWORD array with 2^%d elements... ", bufferSizePower);
 			for (UINT64 i = 0; i < dwordBufSize; i++) {
 				dwordBuf[i] = i;
 			}
 			printf("done in %d ms\n", clock() - timeStarted);
 
+			charBuf = (char*)dwordBuf;
+			byteBufferSize = dwordBufSize << 2; // convert to bytes
+			printf("");
 		}
 
 		~SenderSocket() {
@@ -204,4 +218,5 @@ class SenderSocket {
 		void startThreads();
 		void waitForThreads();
 		void printFinalStats();
+		float calcRTO(float& estRTT, float sampleRTT, float& devRTT);
 };

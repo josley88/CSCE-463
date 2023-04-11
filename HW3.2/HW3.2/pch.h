@@ -20,7 +20,9 @@
 #include <ctime>
 #include <string>
 #include <iostream>
+#include <vector>
 
 #include "SenderSocket.h"
+#include "Checksum.h"
 
 #endif //PCH_H

@@ -77,8 +77,10 @@ int SenderSocket::open() {
 
 
 	if (responseHeader.flags.ACK && responseHeader.flags.SYN) {
-
+		
 		RTO =  (((float)(clock() - timeSYNSent)) / 1000) * 3;
+		estRTT = RTO / 3;
+		devRTT = estRTT / 4;
 		//printf("[%g] <-- SYN-ACK %d window %d; setting initial RTO to %g\n", (double)(clock() - timeStarted) / 1000, responseHeader.ackSeq, responseHeader.recvWnd, RTO);
 	}
 	
@@ -125,7 +127,7 @@ int SenderSocket::send(char* ptr, int numBytes, int windowBase) {
 
 		// attempt send packet
 		beginRoundTrip = clock();
-		if (sendto(sock, packet, sizeof(SenderDataHeader), 0, (struct sockaddr*)&server, sizeof(server)) == SOCKET_ERROR) {
+		if (sendto(sock, packet, sizeof(SenderDataHeader) + numBytes, 0, (struct sockaddr*)&server, sizeof(server)) == SOCKET_ERROR) {
 			delete[] packet;
 			return FAILED_SEND;
 		}
@@ -179,7 +181,7 @@ int SenderSocket::send(char* ptr, int numBytes, int windowBase) {
 	// double check ACK sequence is correct
 	if (responseHeader.flags.ACK && responseHeader.ackSeq == seq + 1) {
 
-		RTO = (((float)(clock() - timeSYNSent)) / 1000) * 3;
+		RTO = calcRTO(estRTT, obsRTT, devRTT);
 		//printf("[%g] <-- ACK %d window %d, RTO %g\n", (double)(clock() - timeStarted) / 1000, responseHeader.ackSeq, responseHeader.recvWnd, RTO);
 	}
 	else {
@@ -199,13 +201,15 @@ int SenderSocket::close() {
 		return NOT_CONNECTED;
 	}
 
-	int counter = 0;
+	finalWindow = responseHeader.recvWnd;
+
 	int timeFINSent = 0;
 	int attempt = 0;
 
 	// set fin and syn
 	syn.sdh.flags.FIN = 1;
 	syn.sdh.flags.SYN = 0;
+	syn.sdh.seq = seq;
 
 	//printf("Seconds: %d\n\n", secondsFromFloat(RTO));
 	//printf("Microseconds: %d\n\n", microSecondsFromFloat(RTO));
@@ -218,13 +222,8 @@ int SenderSocket::close() {
 
 		timeFINSent = clock();
 
-		printf("[%g] --> FIN %d (attempt %d of %d, RTO %g)\n",
-			(double)(clock() - timeStarted) / 1000,
-			counter,
-			attempt,
-			MAX_ATTEMPTS,
-			RTO
-		);
+		//printf("[%g] --> FIN %d (attempt %d of %d, RTO %g)\n", (double)(clock() - timeStarted) / 1000, seq, attempt, MAX_ATTEMPTS, RT);
+		
 		if (sendto(sock, (char*)&syn, sizeof(SenderSynHeader), 0, (struct sockaddr*)&server, sizeof(server)) == SOCKET_ERROR) {
 			printf("[%g] --> failed sendto with %d\n",
 				(double)(clock() - timeStarted) / 1000,
@@ -280,7 +279,7 @@ int SenderSocket::close() {
 
 		RTO = (float)((clock() - timeFINSent) / 1000) * 3;
 		//recvBytes = responseHeader.recvWnd
-		printf("[%g] <-- FIN-ACK %d window %d\n",
+		printf("[%g] <-- FIN-ACK %d window %08X\n",
 			(double)(clock() - timeStarted) / 1000,
 			responseHeader.ackSeq,
 			responseHeader.recvWnd
@@ -393,7 +392,8 @@ UINT SenderSocket::statThread() {
 		EnterCriticalSection(&criticalSection);
 
 		// get rate, then divide by 125,000 to convert from bytes per sec to megabits per sec
-		float downloadRate = (float)(sentBytes - prevSentBytes) / (float)(time_s - prevTime_s) / 125000;
+		downloadRate = (float)(sentBytes - prevSentBytes) / (float)(time_s - prevTime_s) / 125000;
+		downloadRateList.push_back(downloadRate);
 		prevSentBytes = sentBytes;
 		totalSentBytes += sentBytes;
 
@@ -464,7 +464,7 @@ UINT SenderSocket::workerThread() {
 		// send chunk into socket
 		if ((status = send(charBuf + cursor, recvBytes, seq)) != STATUS_OK) {
 			// handle errors
-			printf("Thread: send failed with status %d\n", status);
+			printf("Main: send failed with status %d\n", status);
 			break;
 		}
 
@@ -544,4 +544,16 @@ void SenderSocket::printFinalStats() {
 	//int totalTimeSec = (clock() - startTime) / 1000;
 
 	// TODO printf()
+}
+
+float SenderSocket::calcRTO(float& estRTT, float sampleRTT, float& devRTT) {
+	const float alpha = 0.125;
+	const float beta = 0.25;
+	
+	estRTT = (1 - alpha) * estRTT + alpha * sampleRTT;
+
+	double diff = abs(sampleRTT - estRTT);
+	devRTT = (1 - beta) * devRTT + beta * diff;
+
+	return estRTT + (4 * max(devRTT, 0.010));
 }
