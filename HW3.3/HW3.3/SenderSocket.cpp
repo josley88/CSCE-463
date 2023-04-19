@@ -89,101 +89,6 @@ int SenderSocket::open() {
 	return STATUS_OK;
 }
 
-int SenderSocket::send(char* ptr, int numBytes, int windowBase) {
-
-	if (!connectionOpen) {
-		return NOT_CONNECTED;
-	}
-
-	int counter = 0;
-	int maxAttempts = 3;
-	int timeSYNSent = 0;
-	int attempt = 0;
-
-	SenderDataHeader sdh;
-
-	sdh.flags.reserved = 0;
-	sdh.flags.SYN = 0;
-	sdh.flags.FIN = 0;
-	sdh.flags.ACK = 0;
-	sdh.seq = seq;
-	int beginRoundTrip = 0;
-
-	char* packet = new char[MAX_PKT_SIZE];
-
-	while (attempt++ < MAX_ATTEMPTS) {
-
-		timeval timeout;
-		timeout.tv_sec = secondsFromFloat(RTO);
-		timeout.tv_usec = microSecondsFromFloat(RTO);
-
-		timeSYNSent = clock();
-		
-		// create packet from header and data
-		memcpy(packet, &sdh, sizeof(SenderDataHeader));
-		memcpy(packet + sizeof(SenderDataHeader), ptr, numBytes);
-
-		// attempt send packet
-		beginRoundTrip = clock();
-		if (sendto(sock, packet, sizeof(SenderDataHeader) + numBytes, 0, (struct sockaddr*)&server, sizeof(server)) == SOCKET_ERROR) {
-			delete[] packet;
-			return FAILED_SEND;
-		}
-
-		fd_set fd;
-		FD_ZERO(&fd);
-		FD_SET(sock, &fd);
-		int available = select(0, &fd, NULL, NULL, &timeout);
-
-		
-		if (available > 0) {	// response ready
-			break;
-		}
-		else {					// timeout
-			continue;
-		}
-	}
-
-	obsRTT = (float)(clock() - beginRoundTrip) / 1000;
-
-	delete[] packet;
-
-
-	if (attempt > MAX_ATTEMPTS) {
-		numTimeouts++;
-		return TIMEOUT;
-	}
-
-	//printf("Successfully sent packet!\n");
-	struct sockaddr_in response;
-	int responseSize = sizeof(response);
-
-	int received = recvfrom(sock, (char*)&responseHeader, sizeof(ReceiverHeader), 0, (struct sockaddr*)&response, &responseSize);
-	if (received == SOCKET_ERROR) {
-		return FAILED_RECV;
-	}
-	else {
-		recvBytes = received;
-	}
-
-	if (response.sin_addr.S_un.S_addr != server.sin_addr.S_un.S_addr || response.sin_port != server.sin_port) {
-		printf("Response port or server mismatch!\n");
-	}
-
-	// double check ACK sequence is correct
-	if (responseHeader.flags.ACK && responseHeader.ackSeq == seq + 1) {
-		RTO = calcRTO(estRTT, obsRTT, devRTT);
-	}
-	else {
-		// wrong ACK sequence    TODO
-		return TIMEOUT;
-	}
-
-	sentBytes += numBytes;
-
-	return STATUS_OK;
-}
-
 int SenderSocket::close() {
 
 	if (!connectionOpen) {
@@ -207,7 +112,7 @@ int SenderSocket::close() {
 		timeout.tv_usec = microSecondsFromFloat(RTO);
 
 		timeFINSent = clock();
-		
+
 		if (sendto(sock, (char*)&syn, sizeof(SenderSynHeader), 0, (struct sockaddr*)&server, sizeof(server)) == SOCKET_ERROR) {
 			printf("[%g] --> failed sendto with %d\n",
 				(double)(clock() - timeStarted) / 1000,
@@ -273,89 +178,105 @@ int SenderSocket::close() {
 	return STATUS_OK;
 }
 
-int SenderSocket::lookupDNS() {
+int SenderSocket::send(char* data, int numBytes, int windowBase) {
 
-	WSADATA wsaData;
-
-	//Initialize WinSock; once per program run
-	WORD wVersionRequested = MAKEWORD(2, 2);
-	if (WSAStartup(wVersionRequested, &wsaData) != 0) {
-		printf("WSAStartup error %d\n", WSAGetLastError());
-		quit();
+	if (!connectionOpen) {
+		return NOT_CONNECTED;
 	}
 
-	sock = socket(AF_INET, SOCK_DGRAM, 0);
-	if (sock == INVALID_SOCKET) {
-		printf("socket() generated error %d\n", WSAGetLastError());
-		quit();
-	}
+	HANDLE arr[] = { eventQuit, empty };
 
-	struct sockaddr_in local;
-	memset(&local, 0, sizeof(local));
-	local.sin_family = AF_INET;
-	local.sin_addr.s_addr = INADDR_ANY;
-	local.sin_port = htons(0);
+	WaitForMultipleObjects(2, arr, false, INFINITE);
 
-	if (bind(sock, (struct sockaddr*)&local, sizeof(local)) == SOCKET_ERROR) {
-		printf("Binding port error: %d\n", WSAGetLastError());
-		quit();
-	}
+	int counter = 0;
+	int maxAttempts = 3;
+	int timeSYNSent = 0;
+	int attempt = 0;
 
-	// structure used in DNS lookups
-	struct hostent* remote;
+	int slot = seq % senderWindow; // TODO check this again later
 
-	// first assume that the string is an IP address
-	DWORD IP = inet_addr(targetHost);
+	Packet* packet = pendingPackets + slot;
 
+	SenderDataHeader sdh;
 
+	sdh.flags.reserved = 0;
+	sdh.flags.SYN = 0;
+	sdh.flags.FIN = 0;
+	sdh.flags.ACK = 0;
+	sdh.seq = seq;
+	int beginRoundTrip = 0;
 
-	if (IP == INADDR_NONE) {
+	// copy data and header to packet
+	memcpy(packet->pkt + sizeof(SenderDataHeader), data, numBytes);
+	memcpy(packet->pkt, &sdh, sizeof(SenderDataHeader));
 
-		clock_t time_ms = clock();
+	nextSeq++;
 
-		// if not a valid IP, then do a DNS lookup
-		if ((remote = gethostbyname(targetHost)) == NULL) {
-			printf("[%g] --> target %s is invalid\n",
-				(double)(clock() - timeStarted) / 1000,
-				targetHost
-			);
-			return INVALID_NAME;
+	ReleaseSemaphore(full, 1);
+
+	while (attempt++ < MAX_ATTEMPTS) {
+
+		timeval timeout;
+		timeout.tv_sec = secondsFromFloat(RTO);
+		timeout.tv_usec = microSecondsFromFloat(RTO);
+
+		// attempt send packet
+		beginRoundTrip = clock();
+		if (sendto(sock, packet->pkt, sizeof(SenderDataHeader) + numBytes, 0, (struct sockaddr*)&server, sizeof(server)) == SOCKET_ERROR) {
+			return FAILED_SEND;
 		}
-		else {// take the first IP address and copy into sin_addr
-			memcpy((char*)&(server.sin_addr), remote->h_addr, remote->h_length);
+
+		fd_set fd;
+		FD_ZERO(&fd);
+		FD_SET(sock, &fd);
+		int available = select(0, &fd, NULL, NULL, &timeout);
+
+		
+		if (available > 0) {	// response ready
+			break;
 		}
+		else {					// timeout
+			continue;
+		}
+	}
+
+	obsRTT = (float)(clock() - beginRoundTrip) / 1000;
+
+
+	if (attempt > MAX_ATTEMPTS) {
+		numTimeouts++;
+		return TIMEOUT;
+	}
+
+	//printf("Successfully sent packet!\n");
+	struct sockaddr_in response;
+	int responseSize = sizeof(response);
+
+	int received = recvfrom(sock, (char*)&responseHeader, sizeof(ReceiverHeader), 0, (struct sockaddr*)&response, &responseSize);
+	if (received == SOCKET_ERROR) {
+		return FAILED_RECV;
 	}
 	else {
-		// if valid IP, set server IP as this IP
-		server.sin_addr.S_un.S_addr = IP;
+		recvBytes = received;
 	}
 
-	memcpy(ipString, inet_ntoa(server.sin_addr), 15);
+	if (response.sin_addr.S_un.S_addr != server.sin_addr.S_un.S_addr || response.sin_port != server.sin_port) {
+		printf("Response port or server mismatch!\n");
+	}
 
-	// setup the port # and protocol type
-	server.sin_family = AF_INET;
-	server.sin_port = htons(MAGIC_PORT);
+	// double check ACK sequence is correct
+	if (responseHeader.flags.ACK && responseHeader.ackSeq == seq + 1) {
+		RTO = calcRTO(estRTT, obsRTT, devRTT);
+	}
+	else {
+		// wrong ACK sequence    TODO
+		return TIMEOUT;
+	}
+
+	sentBytes += numBytes;
 
 	return STATUS_OK;
 }
-
-void SenderSocket::quit() {
-	WSACleanup();
-	delete[] dwordBuf;
-	exit(-1);
-}
-
-int SenderSocket::secondsFromFloat(double time) {
-	return (int)time;
-}
-
-int SenderSocket::microSecondsFromFloat(double time) {
-	double integral;
-	return (int) (modf(time, &integral) * 1000 * 1000);
-}
-
-
-
 
 // MULTITHREADING SECTION
 
@@ -538,4 +459,85 @@ float SenderSocket::calcRTO(float& estRTT, float sampleRTT, float& devRTT) {
 	devRTT = (1 - beta) * devRTT + beta * diff;
 
 	return estRTT + (4 * max(devRTT, 0.010));
+}
+
+int SenderSocket::lookupDNS() {
+
+	WSADATA wsaData;
+
+	//Initialize WinSock; once per program run
+	WORD wVersionRequested = MAKEWORD(2, 2);
+	if (WSAStartup(wVersionRequested, &wsaData) != 0) {
+		printf("WSAStartup error %d\n", WSAGetLastError());
+		quit();
+	}
+
+	sock = socket(AF_INET, SOCK_DGRAM, 0);
+	if (sock == INVALID_SOCKET) {
+		printf("socket() generated error %d\n", WSAGetLastError());
+		quit();
+	}
+
+	struct sockaddr_in local;
+	memset(&local, 0, sizeof(local));
+	local.sin_family = AF_INET;
+	local.sin_addr.s_addr = INADDR_ANY;
+	local.sin_port = htons(0);
+
+	if (bind(sock, (struct sockaddr*)&local, sizeof(local)) == SOCKET_ERROR) {
+		printf("Binding port error: %d\n", WSAGetLastError());
+		quit();
+	}
+
+	// structure used in DNS lookups
+	struct hostent* remote;
+
+	// first assume that the string is an IP address
+	DWORD IP = inet_addr(targetHost);
+
+
+
+	if (IP == INADDR_NONE) {
+
+		clock_t time_ms = clock();
+
+		// if not a valid IP, then do a DNS lookup
+		if ((remote = gethostbyname(targetHost)) == NULL) {
+			printf("[%g] --> target %s is invalid\n",
+				(double)(clock() - timeStarted) / 1000,
+				targetHost
+			);
+			return INVALID_NAME;
+		}
+		else {// take the first IP address and copy into sin_addr
+			memcpy((char*)&(server.sin_addr), remote->h_addr, remote->h_length);
+		}
+	}
+	else {
+		// if valid IP, set server IP as this IP
+		server.sin_addr.S_un.S_addr = IP;
+	}
+
+	memcpy(ipString, inet_ntoa(server.sin_addr), 15);
+
+	// setup the port # and protocol type
+	server.sin_family = AF_INET;
+	server.sin_port = htons(MAGIC_PORT);
+
+	return STATUS_OK;
+}
+
+void SenderSocket::quit() {
+	WSACleanup();
+	delete[] dwordBuf;
+	exit(-1);
+}
+
+int SenderSocket::secondsFromFloat(double time) {
+	return (int)time;
+}
+
+int SenderSocket::microSecondsFromFloat(double time) {
+	double integral;
+	return (int)(modf(time, &integral) * 1000 * 1000);
 }

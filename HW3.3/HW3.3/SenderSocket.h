@@ -68,6 +68,14 @@ class ReceiverHeader {
 		DWORD ackSeq; // ack value = next expected sequence
 };
 
+class Packet {
+	public:
+		int type;
+		int size;
+		clock_t txTime;
+		char pkt[MAX_PKT_SIZE];
+};
+
 #pragma pack(pop)
 
 
@@ -106,6 +114,7 @@ class SenderSocket {
 		// transfer vars
 		UINT64 cursor;
 		UINT64 seq;
+		UINT64 nextSeq;
 		UINT64 byteBufferSize;
 		char* charBuf;
 		int sentBytes;
@@ -123,10 +132,16 @@ class SenderSocket {
 		HANDLE worker;
 		HANDLE stat;
 		HANDLE finished;
+		HANDLE eventQuit;
+		HANDLE empty;
+		HANDLE full;
 		LONG activeThreads;
 		bool quitStats;
 		bool statsReady;
 		int numThreads;
+		Packet* pendingPackets;
+
+		std::queue<char*> Q;
 
 		
 		SenderSocket(char** argv) {
@@ -137,7 +152,7 @@ class SenderSocket {
 			cursor = 0;
 			stat = nullptr;
 			worker = nullptr;
-			recvBytes, seq, numTimeouts, numFastRet, byteBufferSize, obsRTT = 0;
+			recvBytes, seq, nextSeq, numTimeouts, numFastRet, byteBufferSize, obsRTT = 0;
 			connectionOpen = false;
 			downloadRate = 0;
 			finalWindow = 0;
@@ -197,10 +212,13 @@ class SenderSocket {
 			charBuf = (char*)dwordBuf;
 			byteBufferSize = dwordBufSize << 2; // convert to bytes
 			printf("");
+
+			pendingPackets = new Packet[senderWindow];
 		}
 
 		~SenderSocket() {
 			delete[] dwordBuf;
+			delete[] pendingPackets;
 		}
 
 		void quit();

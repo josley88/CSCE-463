@@ -21,6 +21,7 @@
 #include <string>
 #include <iostream>
 #include <vector>
+#include <queue>
 
 #include "SenderSocket.h"
 #include "Checksum.h"
