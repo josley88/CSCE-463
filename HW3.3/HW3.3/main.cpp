@@ -28,12 +28,41 @@ int main(int argc, char** argv) {
 	}
 	else {
 		
-		printf("Main: connected to %s in %g sec, pkt size %d bytes\n", ss.targetHost, (float)(clock() - ss.timeStarted) / 1000, MAX_PKT_SIZE);
+		printf("[Main] connected to %s in %g sec, pkt size %d bytes\n", ss.targetHost, (float)(clock() - ss.timeStarted) / 1000, MAX_PKT_SIZE);
 
 		int timeStartTransfer = clock();
 
-		// start threads and wait
+		// start stat and worker thread
 		ss.startThreads();
+
+		int status = 0;
+		// populate pending packet queue
+		while (true) {
+
+			// quit if the end of the buffer is reached
+			if (ss.cursor >= ss.byteBufferSize) {
+				//if (DEBUG) { printf("====================== DONE SENDING ======================\n"); }
+				ss.doneSending = true;
+				break;
+			}
+
+			// get size of next chunk and move the cursor forward for the next thread to use
+			int recvBytes = min(ss.byteBufferSize - ss.cursor, MAX_PKT_SIZE - sizeof(SenderDataHeader));
+
+			// send() chunk to producer window array
+			//if (DEBUG) { printf("Main: Sending packet with seq=%d, numBytes=%d\n", (int) ss.nextSeq, recvBytes); }
+			if ((status = ss.send(ss.charBuf + ss.cursor, recvBytes)) != STATUS_OK) {
+				// handle errors
+				printf("Main: send failed with status %d\n", status);
+				break;
+			}
+
+			ss.cursor += recvBytes;
+			ss.nextSeq++;
+			//if (DEBUG) { printf("Main: Updated cursor position: %d\n", ss.cursor); }
+		}
+
+
 		ss.waitForThreads();
 
 		int transferTime = clock() - timeStartTransfer;
@@ -47,9 +76,8 @@ int main(int argc, char** argv) {
 		}
 
 		float total = 0;
-		for (auto x : ss.downloadRateList) {
+		for (auto x : ss.downloadRateList)
 			total += x;
-		}
 		total *= 1000;
 		total /= ss.downloadRateList.size();
 
@@ -57,6 +85,6 @@ int main(int argc, char** argv) {
 		DWORD checksum = cs.CRC32((unsigned char*) ss.charBuf, ss.byteBufferSize);
 
 		printf("Main: transfer finished in %g sec, %.2f Kbps, checksum %8X\n", (float) transferTime / 1000, total, checksum);
-		printf("Main: estRTT %.3f, ideal rate %.2f Kbps\n", ss.estRTT, ss.senderWindow * MAX_PKT_SIZE / ss.estRTT / 100);
+		printf("Main: estRTT %.3f, ideal rate %.2f Kbps\n", ss.estRTT, ss.W * MAX_PKT_SIZE / ss.estRTT / 100);
 	}
 }

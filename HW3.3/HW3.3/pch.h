@@ -11,12 +11,16 @@
 
 #ifndef PCH_H
 #define PCH_H
+#define DEBUG false
 
 // add headers that you want to pre-compile here
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
+#define WIN32_LEAN_AND_MEAN
 
 #include <stdio.h>
 #include <windows.h>
-#include <winsock.h>
+//#include <winsock.h>
+#include <WinSock2.h>
 #include <ctime>
 #include <string>
 #include <iostream>

@@ -88,7 +88,7 @@ class SenderSocket {
 
 		char* targetHost;
 		int bufferSizePower;
-		int senderWindow;
+		int W;
 		double rtt;
 		double forwardLossRate;
 		double returnLossRate;
@@ -97,13 +97,17 @@ class SenderSocket {
 		int timeStarted;
 		int numRetransmissions = 3;
 		float RTO;
+		bool doneSending = false;
+
+		int duplicateACKCount;
 
 		// connection vars
 		SOCKET sock;
 		DWORD* dwordBuf;
 		UINT64 dwordBufSize;
 		SenderSynHeader syn;
-		ReceiverHeader responseHeader;
+		ReceiverHeader synAck;
+		ReceiverHeader responseAck;
 		int recvBytes;
 		int numTimeouts;
 		int numFastRet;
@@ -114,7 +118,12 @@ class SenderSocket {
 		// transfer vars
 		UINT64 cursor;
 		UINT64 seq;
+		UINT64 nextToSend;
 		UINT64 nextSeq;
+		UINT64 senderBase;
+		UINT64 ackSeq;
+		UINT64 lastAckSeq;
+
 		UINT64 byteBufferSize;
 		char* charBuf;
 		int sentBytes;
@@ -126,6 +135,8 @@ class SenderSocket {
 		float downloadRate;
 		std::vector<float> downloadRateList;
 		int finalWindow;
+		int effectiveWindow;
+		int lastReleased;
 
 		// multithreading vars
 		CRITICAL_SECTION criticalSection;
@@ -135,13 +146,14 @@ class SenderSocket {
 		HANDLE eventQuit;
 		HANDLE empty;
 		HANDLE full;
+		HANDLE socketReceiveReady;
 		LONG activeThreads;
 		bool quitStats;
 		bool statsReady;
 		int numThreads;
 		Packet* pendingPackets;
-
-		std::queue<char*> Q;
+		int* numBytesBySlot;
+		LONG numEmpty;
 
 		
 		SenderSocket(char** argv) {
@@ -156,20 +168,30 @@ class SenderSocket {
 			connectionOpen = false;
 			downloadRate = 0;
 			finalWindow = 0;
+			ackSeq = 0;
+			senderBase = 0;
+			nextSeq = 0;
+			nextToSend = 0;
+			duplicateACKCount = 0;
+			effectiveWindow = 0;
+			lastReleased = 0;
 
 			// initialize arg vars
 			targetHost = argv[1];
 			bufferSizePower = atoi(argv[2]);
-			senderWindow = atoi(argv[3]);
+			W = atoi(argv[3]);
 			rtt = atof(argv[4]);
 			forwardLossRate = atof(argv[5]);
 			returnLossRate = atof(argv[6]);
 			bottleneckSpeed = atof(argv[7]);
 
+			// setup dword array vars
 			dwordBufSize = (UINT64)1 << bufferSizePower;
 			dwordBuf = new DWORD[dwordBufSize];
 
+			// tick-tock
 			timeStarted = clock();
+
 
 			// setup flags for SYN packet header
 			syn.sdh.flags.reserved = 0;
@@ -177,25 +199,40 @@ class SenderSocket {
 			syn.sdh.seq = 0;
 			RTO = max(1, rtt * 2);
 
+
 			// setup flags for SYN link properties
 			syn.lp.RTT = rtt;
 			syn.lp.speed = 1e6 * bottleneckSpeed;
 			syn.lp.pLoss[0] = forwardLossRate;
 			syn.lp.pLoss[1] = returnLossRate;
-			syn.lp.bufferSize = senderWindow + numRetransmissions;
+			syn.lp.bufferSize = W + numRetransmissions;
+
 
 			// setup threads
-			numThreads = senderWindow;
+			numThreads = W;
 			activeThreads = 0;
 			quitStats, statsReady = false;
 
+
+			// setup multithreading sync vars
 			InitializeCriticalSection(&criticalSection);
 			finished = CreateSemaphore(NULL, 0, numThreads, NULL);
+			empty	 = CreateSemaphore(NULL, W, W,			NULL);
+			full	 = CreateSemaphore(NULL, 0, W,			NULL);
+			eventQuit =			 CreateEvent(NULL, true,  false, NULL);
+			socketReceiveReady = CreateEvent(NULL, false, false, NULL);
+			if (socketReceiveReady == NULL) {
+				printf("Error %d: couldn't create socket event\n", WSAGetLastError());
+				this->~SenderSocket();
+				exit(0);
+			}
+			numEmpty = W;
+			
 
 
 			// print input parameters
 			printf("Main: sender W = %d, RTT %g sec, loss %g / %g, link %g Mbps\n",
-				senderWindow,
+				W,
 				rtt,
 				forwardLossRate,
 				returnLossRate,
@@ -213,17 +250,21 @@ class SenderSocket {
 			byteBufferSize = dwordBufSize << 2; // convert to bytes
 			printf("");
 
-			pendingPackets = new Packet[senderWindow];
+			pendingPackets = new Packet[W];
+			numBytesBySlot = new int[W];
 		}
 
 		~SenderSocket() {
 			delete[] dwordBuf;
 			delete[] pendingPackets;
+			delete[] numBytesBySlot;
 		}
 
 		void quit();
 		int open();
-		int send(char* ptr, int numBytes, int windowBase);
+		int send(char* ptr, int numBytes);
+		int sendPacket(UINT64 seqToSend);
+		int receiveACK();
 		int lookupDNS();
 		int close();
 
